@@ -1,0 +1,50 @@
+services:
+  server:
+    build:
+      context: .
+      dockerfile: Dockerfile.server
+    container_name: server
+    volumes:
+      - .:/usr/server
+      - /usr/server/node_modules
+    ports:
+      - 3000:3000
+    env_file:
+      - path: ./.env
+      - path: ./.env.local
+        required: false
+    environment:
+      - TERM=xterm-256color
+      - NODE_ENV=development
+    networks:
+      - internal
+    command: ["npm", "start"]
+  web:
+    build:
+      context: .
+      dockerfile: Dockerfile.web
+    container_name: web
+    volumes:
+      - .:/usr/web
+      - /usr/web/node_modules
+    ports:
+      - 5173:5173
+    env_file:
+      - path: ./.env
+      - path: ./.env.local
+        required: false
+    environment:
+      - TERM=xterm-256color
+      - NODE_ENV=development
+    expose:
+      - 5173
+    networks:
+      - internal
+      - default
+    command: ["npm", "run", "dev"]
+
+networks:
+  internal:
+  default:
+    external: true
+    name: code-preview-services

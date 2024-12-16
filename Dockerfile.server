@@ -1,0 +1,11 @@
+FROM node:23-alpine
+
+WORKDIR /usr/server
+
+COPY package.json ./
+COPY package-lock.json ./
+
+RUN npm install -g nodemon
+RUN npm ci
+
+EXPOSE 3000

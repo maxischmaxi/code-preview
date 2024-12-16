@@ -1,0 +1,60 @@
+body {
+  padding: 0;
+  margin: 0;
+  background-color: #000;
+}
+
+.wrapper {
+  position: relative;
+  height: 100vh;
+  display: flex;
+  flex-direction: column;
+  width: 100vw;
+  justify-content: center;
+  align-items: center;
+}
+
+#editor {
+  width: 100%;
+  height: calc(100vh - 16px);
+  min-height: calc(100vh - 16px);
+}
+
+.statusbar {
+  width: calc(100% - 16px);
+  height: 16px;
+  background-color: #333;
+  max-height: 16px;
+  overflow: hidden;
+  display: flex;
+  flex-direction: row;
+  flex-wrap: nowrap;
+  padding-inline: 8px;
+}
+
+.statusbar-item {
+  height: 16px;
+  width: 16px;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  color: #61e058;
+
+  & .disconnected {
+    color: #ff3b3b;
+  }
+
+  & svg {
+    width: 12px;
+    height: 12px;
+  }
+}
+
+.cursor-decoration {
+  background-color: #fff;
+  width: 2px !important;
+}
+
+.selection-decoration {
+  background-color: rgba(255 255 255 / 0.2)
+}
