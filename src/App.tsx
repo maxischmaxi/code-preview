@@ -13,7 +13,7 @@ import "monaco-editor/esm/vs/basic-languages/python/python.contribution";
 import "monaco-editor/esm/vs/basic-languages/xml/xml.contribution";
 import "monaco-editor/esm/vs/basic-languages/yaml/yaml.contribution";
 
-const url = "http://server:3000";
+const url = "http://localhost:3000";
 const socket = io(url, {
   transports: ["websocket"],
 });

@@ -4,6 +4,7 @@ WORKDIR /usr/server
 
 COPY package.json ./
 COPY package-lock.json ./
+COPY nodemon.json ./
 
 RUN npm install -g nodemon
 RUN npm ci

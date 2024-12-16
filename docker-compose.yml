@@ -18,7 +18,11 @@ services:
       - NODE_ENV=development
     networks:
       - internal
-    command: ["npm", "start"]
+      - default
+    expose:
+      - 3000
+    command: ["npm", "run", "start-server"]
+
   web:
     build:
       context: .
@@ -36,15 +40,13 @@ services:
     environment:
       - TERM=xterm-256color
       - NODE_ENV=development
-    expose:
-      - 5173
     networks:
       - internal
       - default
+    expose:
+      - 5173
     command: ["npm", "run", "dev"]
 
 networks:
   internal:
   default:
-    external: true
-    name: code-preview-services

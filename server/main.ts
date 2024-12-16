@@ -46,7 +46,7 @@ const connectedClients: ConnectedClient[] = [];
 const httpServer = createServer();
 const io = new Server(httpServer, {
   cors: {
-    origin: "http://localhost:5173",
+    origin: "*",
   },
 });
 
@@ -158,6 +158,9 @@ io.on("error", (error) => {
   console.log(error);
 });
 
-httpServer.listen(3000, () => {
+httpServer.listen({
+  port: 3000,
+  host: "0.0.0.0",
+}, () => {
   console.log("Server is running on port 3000");
 });
