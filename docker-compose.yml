@@ -3,12 +3,12 @@ services:
     build:
       context: .
       dockerfile: Dockerfile.server
-    container_name: server
+    container_name: code-preview-server
     volumes:
       - .:/usr/server
       - /usr/server/node_modules
     ports:
-      - 3000:3000
+      - 5172:5172
     env_file:
       - path: ./.env
       - path: ./.env.local
@@ -20,14 +20,14 @@ services:
       - internal
       - default
     expose:
-      - 3000
+      - 5172
     command: ["npm", "run", "start-server"]
 
   web:
     build:
       context: .
       dockerfile: Dockerfile.web
-    container_name: web
+    container_name: code-preview-web
     volumes:
       - .:/usr/web
       - /usr/web/node_modules

@@ -159,8 +159,8 @@ io.on("error", (error) => {
 });
 
 httpServer.listen({
-  port: 3000,
+  port: 5172,
   host: "0.0.0.0",
 }, () => {
-  console.log("Server is running on port 3000");
+  console.log("Server is running on port 5172");
 });

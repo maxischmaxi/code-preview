@@ -9,4 +9,4 @@ COPY nodemon.json ./
 RUN npm install -g nodemon
 RUN npm ci
 
-EXPOSE 3000
+EXPOSE 5172
