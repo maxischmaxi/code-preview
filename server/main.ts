@@ -53,8 +53,7 @@ const io = new Server(httpServer, {
 const file: File = {
   name: "index.ts",
   language: "typescript",
-  value: `
-import React from 'react';
+  value: `import React from 'react';
 import ReactDOM from 'react-dom';
 
 import Editor, { useMonaco } from '@monaco-editor/react';
@@ -103,6 +102,12 @@ io.on("connection", (socket) => {
       }
     }
   });
+
+  socket.on("replaceText", (text: string) => {
+    file.value = text;
+    socket.broadcast.emit("change", file);
+    socket.emit("change", file);
+  })
 
   socket.on("getCursorPositions", () => {
     const positions = connectedClients.filter(
