@@ -1,7 +1,7 @@
 import * as monaco from "monaco-editor/esm/vs/editor/editor.api";
-import classNames from 'classnames';
-import { Cloud, CloudOff, MonitorUp } from 'lucide-react';
-import { useEffect, useRef, useState, MouseEvent } from 'react';
+import classNames from "classnames";
+import { Cloud, CloudOff, Loader, MonitorUp } from "lucide-react";
+import { useEffect, useRef, useState, MouseEvent } from "react";
 import { io } from "socket.io-client";
 import "monaco-editor/esm/vs/basic-languages/typescript/typescript.contribution";
 import "monaco-editor/esm/vs/basic-languages/javascript/javascript.contribution";
@@ -12,6 +12,9 @@ import "monaco-editor/esm/vs/basic-languages/php/php.contribution";
 import "monaco-editor/esm/vs/basic-languages/python/python.contribution";
 import "monaco-editor/esm/vs/basic-languages/xml/xml.contribution";
 import "monaco-editor/esm/vs/basic-languages/yaml/yaml.contribution";
+import { useTheme } from "./hooks/useTheme";
+import { useQueryGetSession } from "./hooks/useQueryGetSession";
+import { useParams } from "react-router";
 
 const url = "http://localhost:5172";
 const socket = io(url, {
@@ -22,13 +25,13 @@ type File = {
   name: string;
   language: string;
   value: string;
-}
+};
 
 type ConnectedClient = {
   id: string;
   cursorPosition: CursorPosition;
   cursorSelection: monaco.Selection | null;
-}
+};
 
 type CursorPosition = {
   lineNumber: number;
@@ -36,13 +39,20 @@ type CursorPosition = {
 };
 
 export function App() {
-  const [connectedClients, setConnectedClients] = useState<ConnectedClient[]>([]);
+  const [connectedClients, setConnectedClients] = useState<ConnectedClient[]>(
+    [],
+  );
+  const { id = "" } = useParams();
   const [isConnected, setIsConnected] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
   const [newCode, setNewCode] = useState("");
-  const decorationsCollectionRef = useRef<monaco.editor.IEditorDecorationsCollection | null>(null);
+  const decorationsCollectionRef =
+    useRef<monaco.editor.IEditorDecorationsCollection | null>(null);
   const editorRef = useRef<monaco.editor.IStandaloneCodeEditor | null>(null);
   const editorWrapperRef = useRef<HTMLDivElement>(null);
+  const { theme } = useTheme();
+
+  const session = useQueryGetSession(id);
 
   useEffect(() => {
     function handleKey(e: KeyboardEvent) {
@@ -51,11 +61,11 @@ export function App() {
       }
     }
 
-    window.addEventListener("keydown", handleKey)
+    window.addEventListener("keydown", handleKey);
 
     return () => {
       window.removeEventListener("keydown", handleKey);
-    }
+    };
   }, []);
 
   useEffect(() => {
@@ -63,7 +73,7 @@ export function App() {
 
     return () => {
       socket.disconnect();
-    }
+    };
   }, []);
 
   useEffect(() => {
@@ -77,44 +87,47 @@ export function App() {
           c.cursorPosition.lineNumber,
           c.cursorPosition.column,
           c.cursorPosition.lineNumber,
-          c.cursorPosition.column
+          c.cursorPosition.column,
         ),
         options: {
           className: "cursor-decoration",
           after: {
             content: c.id,
           },
-        }
-      }))
+        },
+      }));
     }
 
     function generateSelections() {
-      return connectedClients.filter((c) => Boolean(c.cursorSelection)).map((c) => ({
-        range: new monaco.Range(
-          c.cursorSelection!.startLineNumber,
-          c.cursorSelection!.startColumn,
-          c.cursorSelection!.endLineNumber,
-          c.cursorSelection!.endColumn,
-        ),
-        options: {
-          className: "selection-decoration",
-          stickiness: monaco.editor.TrackedRangeStickiness.NeverGrowsWhenTypingAtEdges
-        }
-      }))
+      return connectedClients
+        .filter((c) => Boolean(c.cursorSelection))
+        .map((c) => ({
+          range: new monaco.Range(
+            c.cursorSelection!.startLineNumber,
+            c.cursorSelection!.startColumn,
+            c.cursorSelection!.endLineNumber,
+            c.cursorSelection!.endColumn,
+          ),
+          options: {
+            className: "selection-decoration",
+            stickiness:
+              monaco.editor.TrackedRangeStickiness.NeverGrowsWhenTypingAtEdges,
+          },
+        }));
     }
 
     if (decorationsCollectionRef.current) {
       decorationsCollectionRef.current.clear();
       decorationsCollectionRef.current.set([
         ...generateCursorPositions(),
-        ...generateSelections()
+        ...generateSelections(),
       ]);
       return;
     }
 
     const collection = editorRef.current.createDecorationsCollection([
       ...generateCursorPositions(),
-      ...generateSelections()
+      ...generateSelections(),
     ]);
     decorationsCollectionRef.current = collection;
   }, [connectedClients]);
@@ -145,13 +158,12 @@ export function App() {
             return {
               ...c,
               cursorPosition: client.cursorPosition,
-            }
+            };
           }
 
           return c;
-        })
+        });
       });
-
     }
 
     function onCursorSelection(client: ConnectedClient) {
@@ -167,12 +179,12 @@ export function App() {
             return {
               ...c,
               cursorSelection: client.cursorSelection,
-            }
+            };
           }
 
           return c;
         });
-      })
+      });
     }
 
     function onClientDisconnected(clientId: string) {
@@ -195,8 +207,29 @@ export function App() {
       socket.off("change", onChange);
       socket.off("cursorSelection", onCursorSelection);
       socket.off("clientDisconnected", onClientDisconnected);
-    }
+    };
   }, []);
+
+  useEffect(() => {
+    if (!editorRef.current) {
+      return;
+    }
+
+    if (theme === "system") {
+      const systemTheme = window.matchMedia("(prefers-color-scheme: dark)")
+        .matches
+        ? "dark"
+        : "light";
+
+      editorRef.current.updateOptions({
+        theme: systemTheme === "dark" ? "vs-dark" : "vs",
+      });
+    } else {
+      editorRef.current.updateOptions({
+        theme: theme === "dark" ? "vs-dark" : "vs",
+      });
+    }
+  }, [theme]);
 
   useEffect(() => {
     if (editorRef.current) {
@@ -222,22 +255,22 @@ export function App() {
     editor.onDidChangeCursorPosition((e) => {
       socket.emit("cursorPosition", {
         ...e.position.toJSON(),
-      })
-    })
+      });
+    });
 
     editor.onDidChangeCursorSelection((e) => {
       socket.emit("cursorSelection", {
         ...e.selection.toJSON(),
-      })
-    })
+      });
+    });
 
     editor.getModel()?.onDidChangeContent((e) => {
       if (e.isFlush) {
         return;
       }
 
-      socket.emit("change", e.changes)
-    })
+      socket.emit("change", e.changes);
+    });
 
     editorRef.current = editor;
   }, []);
@@ -275,29 +308,34 @@ export function App() {
         a.href = img;
         a.download = "code_screenshot_" + Date.now() + ".png";
         a.click();
-      })
-
-    })
+      });
+    });
   }
 
   return (
-    <div className="wrapper">
-      <div id="editor" ref={editorWrapperRef} />
-      <div className="statusbar">
-        <div className={classNames(
-          'statusbar-item',
-          !isConnected && "disconnected"
-        )} >
-          {isConnected ? <Cloud /> : <CloudOff />}
+    <div className="relative h-full flex flex-col w-full justify-center items-center">
+      <div id="editor" className="w-full h-full" ref={editorWrapperRef} />
+      <div className="w-full h-[16px] bg-background max-h-[16px] overflow-hidden flex flex-row flex-nowrap px-2">
+        <div
+          className={classNames(
+            "w-4 h-4 flex justify-center items-center text-[#61e058]",
+            !isConnected && "text-[#ff3b3b]",
+          )}
+        >
+          {isConnected ? (
+            <Cloud className="w-3 h-3" />
+          ) : (
+            <CloudOff className="w-3 h-3" />
+          )}
         </div>
         <button
           type="button"
           onClick={doScreenshot}
-          className="screenshot-button"
+          className="m-0 p-0 text-white w-4 h-4 flex justify-center items-center flex-row ml-auto bg-transparent border-none"
           title="Take Screenshot"
           aria-label="Take Screenshot"
         >
-          <MonitorUp />
+          <MonitorUp className="w-3 h-3" />
         </button>
       </div>
       {showSettings && (
@@ -328,5 +366,5 @@ export function App() {
         </div>
       )}
     </div>
-  )
+  );
 }
