@@ -2,7 +2,7 @@
 
 import { io } from "socket.io-client";
 
-const url = "http://localhost:5172";
+const url = process.env.API_GATEWAY;
 
 export const socket = io(url, {
     transports: ["websocket", "polling"],
