@@ -2,42 +2,55 @@
 
 import { toast } from "sonner";
 import copy from "copy-to-clipboard";
-import { useQueryGetSession } from "@/hooks/useQueryGetSession";
 import { Editor as MonacoEditor } from "@monaco-editor/react";
 import { useEffect, useState } from "react";
 import { Badge } from "./ui/badge";
 import { ModeToggle } from "./mode-toggle";
-import { Copy, Loader } from "lucide-react";
+import { Copy } from "lucide-react";
 import { socket } from "@/lib/socket";
 import { Button } from "./ui/button";
 import { Session } from "@/lib/definitions";
+import {
+    Dialog,
+    DialogContent,
+    DialogDescription,
+    DialogFooter,
+    DialogHeader,
+    DialogTitle,
+} from "./ui/dialog";
 
 type Props = {
-    id: string;
+    session: Session;
 };
 
-export function Editor({ id }: Props) {
-    const [language, setLanguage] = useState<Session["language"]>("typescript");
-    const session = useQueryGetSession(id);
-    const [value, setValue] = useState("");
+export function Editor({ session }: Props) {
+    const [language, setLanguage] = useState<Session["language"]>(
+        session.language,
+    );
+    const [code, setCode] = useState(session.code);
     const [connectedClients, setConnectedClients] = useState<{ id: string }[]>(
         [],
     );
+    const [showConfigMenu, setShowConfigMenu] = useState(false);
+    const [lintingEnabled, setLintingEnabled] = useState(
+        session.lintingEnabled,
+    );
 
     useEffect(() => {
-        if (session.data) {
-            setValue(session.data.code);
-            setLanguage(session.data.language);
+        if (lintingEnabled) {
+            document.body.classList.remove("hide-suggestions");
+        } else {
+            document.body.classList.add("hide-suggestions");
         }
-    }, [session.data]);
+    }, [lintingEnabled]);
 
     useEffect(() => {
-        socket.emit("join-session", { id });
+        socket.emit("join-session", { id: session.id });
 
         return () => {
-            socket.emit("leave-session", { id });
+            socket.emit("leave-session", { id: session.id });
         };
-    }, [id]);
+    }, [session.id]);
 
     useEffect(() => {
         function onClientJoinedHandler(data: {
@@ -51,7 +64,7 @@ export function Editor({ id }: Props) {
             text: string;
             language: Session["language"];
         }) {
-            setValue(data.text);
+            setCode(data.text);
             setLanguage(data.language);
         }
 
@@ -65,23 +78,40 @@ export function Editor({ id }: Props) {
             setConnectedClients(data);
         }
 
+        function onLintingUpdate(data: { lintingEnabled: boolean }) {
+            setLintingEnabled(data.lintingEnabled);
+        }
+
+        function onLanguageChange(data: { language: Session["language"] }) {
+            setLanguage(data.language);
+        }
+
         socket.on("client-joined", onClientJoinedHandler);
         socket.on("text-input", onTextInputHandler);
         socket.on("disconnected", onDisconnectHandler);
         socket.on("connected-clients", onConnectedClientsHandler);
+        socket.on("linting-update", onLintingUpdate);
+        socket.on("language-change", onLanguageChange);
 
         return () => {
             socket.off("client-joined", onClientJoinedHandler);
             socket.off("text-input", onTextInputHandler);
             socket.off("disconnected", onDisconnectHandler);
             socket.off("connected-clients", onConnectedClientsHandler);
+            socket.off("linting-update", onLintingUpdate);
+            socket.off("language-change", onLanguageChange);
         };
     }, []);
 
     useEffect(() => {
         function onKeyDown(e: KeyboardEvent) {
-            if (e.metaKey && e.shiftKey && e.key === "P") {
-                doScreenshot();
+            if (e.metaKey && e.key === ",") {
+                e.preventDefault();
+                setShowConfigMenu((prev) => !prev);
+            }
+
+            if (e.metaKey && e.key === "s") {
+                e.preventDefault();
             }
         }
 
@@ -92,65 +122,56 @@ export function Editor({ id }: Props) {
         };
     }, []);
 
-    async function doScreenshot() {
-        const el = document.getElementById("editor");
-        if (!el) {
-            toast("Error taking screenshot");
-            return;
-        }
-
-        import("html2canvas").then((html2canvas) => {
-            html2canvas.default(el).then((canvas) => {
-                const img = canvas.toDataURL("image/png");
-                const a = document.createElement("a");
-                a.href = img;
-                a.download = "code_screenshot_" + Date.now() + ".png";
-                a.click();
-            });
-        });
-    }
-
     function copyToClipboard() {
         const domain = window.location.origin;
-        const url = `${domain}/${id}`;
+        const url = `${domain}/${session.id}`;
         copy(url);
         toast("Copied to clipboard");
     }
 
     function onTextInputHandler(value: string | undefined) {
         if (!value) {
-            socket.emit("text-input", { id, text: "", language });
+            socket.emit("text-input", { id: session.id, text: "", language });
         } else {
-            socket.emit("text-input", { id, text: value, language });
+            socket.emit("text-input", {
+                id: session.id,
+                text: value,
+                language,
+            });
         }
     }
 
-    function changeLanguage(language: "typescript" | "javascript" | "css") {
+    function changeLanguage(language: Session["language"]) {
         setLanguage(language);
-        socket.emit("text-input", { id, text: value, language });
+        socket.emit("language-change", {
+            id: session.id,
+            language,
+        });
     }
 
-    if (session.isError) {
-        return (
-            <div className="w-full h-full flex flex-col flex-nowrap justify-center items-center">
-                <p className="text-red-500 text-lg">Error fetching session</p>
-            </div>
-        );
+    function enableLinting() {
+        setLintingEnabled(true);
+        socket.emit("linting-update", {
+            id: session.id,
+            lintingEnabled: true,
+        });
     }
 
-    if (session.isLoading) {
-        return (
-            <div className="w-full h-full flex flex-col flex-nowrap justify-center items-center">
-                <Loader />
-            </div>
-        );
+    function disableLinting() {
+        setLintingEnabled(false);
+        socket.emit("linting-update", {
+            id: session.id,
+            lintingEnabled: false,
+        });
     }
+
+    console.log(session);
 
     return (
         <div className="w-full h-full flex flex-col flex-nowrap">
             <header className="p-4 flex flex-row flex-nowrap justify-between items-center">
                 <Badge className="cursor-pointer" onClick={copyToClipboard}>
-                    {id}
+                    {session.id}
                     <Copy />
                 </Badge>
                 <div className="flex flex-row flex-nowrap gap-4">
@@ -159,102 +180,150 @@ export function Editor({ id }: Props) {
                             {connectedClients.length}
                         </Badge>
                     </div>
-                    <Button
-                        onClick={() => changeLanguage("typescript")}
-                        variant={
-                            language === "typescript" ? "secondary" : "outline"
-                        }
-                        type="button"
-                    >
-                        TS
-                    </Button>
-                    <Button
-                        onClick={() => changeLanguage("javascript")}
-                        type="button"
-                        variant={
-                            language === "javascript" ? "secondary" : "outline"
-                        }
-                    >
-                        JS
-                    </Button>
-                    <Button
-                        onClick={() => changeLanguage("css")}
-                        type="button"
-                        variant={language === "css" ? "secondary" : "outline"}
-                    >
-                        CSS
-                    </Button>
                     <ModeToggle />
                 </div>
             </header>
             <MonacoEditor
                 wrapperProps={{ id: "editor" }}
                 onChange={onTextInputHandler}
-                loading={session.isLoading}
+                onMount={(editor) => {
+                    console.log(editor);
+                }}
                 theme="vs-dark"
                 language={language}
-                value={value}
-                defaultLanguage="typescript"
+                value={code}
                 beforeMount={(monaco) => {
-                    monaco.languages.typescript.typescriptDefaults.setCompilerOptions(
-                        {
-                            target: monaco.languages.typescript.ScriptTarget
-                                .ES2020,
-                        },
-                    );
-                    monaco.languages.typescript.typescriptDefaults.setDiagnosticsOptions(
-                        {
-                            noSemanticValidation: true,
-                            noSyntaxValidation: true,
-                        },
-                    );
+                    if (!lintingEnabled) {
+                        monaco.languages.typescript.typescriptDefaults.setCompilerOptions(
+                            {
+                                target: monaco.languages.typescript.ScriptTarget
+                                    .ES2020,
+                            },
+                        );
 
-                    monaco.languages.json.jsonDefaults.setDiagnosticsOptions({
-                        validate: false,
-                    });
+                        monaco.languages.typescript.typescriptDefaults.setDiagnosticsOptions(
+                            {
+                                noSemanticValidation: true,
+                                noSyntaxValidation: true,
+                            },
+                        );
 
-                    monaco.languages.css.cssDefaults.setOptions({
-                        lint: {
-                            argumentsInColorFunction: "ignore",
-                            boxModel: "ignore",
-                            compatibleVendorPrefixes: "ignore",
-                            duplicateProperties: "ignore",
-                            emptyRules: "ignore",
-                            float: "ignore",
-                            fontFaceProperties: "ignore",
-                            hexColorLength: "ignore",
-                            idSelector: "ignore",
-                            ieHack: "ignore",
-                            important: "ignore",
-                            importStatement: "ignore",
-                            propertyIgnoredDueToDisplay: "ignore",
-                            universalSelector: "ignore",
-                            unknownProperties: "ignore",
-                            unknownVendorSpecificProperties: "ignore",
-                            vendorPrefix: "ignore",
-                            zeroUnits: "ignore",
-                        },
-                        validate: false,
-                    });
+                        monaco.languages.json.jsonDefaults.setDiagnosticsOptions(
+                            {
+                                validate: false,
+                            },
+                        );
+
+                        monaco.languages.css.cssDefaults.setOptions({
+                            validate: false,
+                        });
+                    }
                 }}
+                onValidate={console.log}
                 options={{
-                    "semanticHighlighting.enabled": false,
+                    "semanticHighlighting.enabled": lintingEnabled,
+                    codeLens: lintingEnabled,
                     automaticLayout: true,
-                    readOnly: Boolean(
-                        session.isLoading ||
-                            session.isPending ||
-                            session.isError,
-                    ),
                     theme: "vs-dark",
                     minimap: { enabled: false },
-                    suggest: { preview: false },
+                    suggest: {
+                        preview: lintingEnabled,
+                        showWords: lintingEnabled,
+                    },
                     tabSize: 4,
-                    quickSuggestions: false,
+                    quickSuggestions: {
+                        comments: lintingEnabled,
+                        other: lintingEnabled,
+                        strings: lintingEnabled,
+                    },
+                    parameterHints: {
+                        enabled: lintingEnabled,
+                    },
+                    wordBasedSuggestions: lintingEnabled
+                        ? "currentDocument"
+                        : "off",
+                    suggestOnTriggerCharacters: lintingEnabled,
+                    acceptSuggestionOnEnter: lintingEnabled ? "on" : "off",
+                    tabCompletion: lintingEnabled ? "on" : "off",
                     formatOnPaste: false,
                     formatOnType: false,
                     padding: { top: 16, bottom: 16 },
+                    language,
                 }}
             />
+            <Dialog open={showConfigMenu} onOpenChange={setShowConfigMenu}>
+                <DialogContent>
+                    <DialogHeader>
+                        <DialogTitle>Config</DialogTitle>
+                        <DialogDescription>
+                            Here you can configure the editor
+                        </DialogDescription>
+                    </DialogHeader>
+                    <p>
+                        Select the language you want to use for the editor. This
+                        will change the syntax highlighting.
+                    </p>
+                    <div className="flex flex-row flex-nowrap gap-4">
+                        <Button
+                            onClick={() => changeLanguage("typescript")}
+                            variant={
+                                language === "typescript"
+                                    ? "secondary"
+                                    : "outline"
+                            }
+                            type="button"
+                        >
+                            TS
+                        </Button>
+                        <Button
+                            onClick={() => changeLanguage("javascript")}
+                            type="button"
+                            variant={
+                                language === "javascript"
+                                    ? "secondary"
+                                    : "outline"
+                            }
+                        >
+                            JS
+                        </Button>
+                        <Button
+                            onClick={() => changeLanguage("css")}
+                            type="button"
+                            variant={
+                                language === "css" ? "secondary" : "outline"
+                            }
+                        >
+                            CSS
+                        </Button>
+                    </div>
+                    <p>Linting: {lintingEnabled ? "Enabled" : "Disabled"}</p>
+                    <div className="flex flex-row flex-nowrap gap-4">
+                        <Button
+                            onClick={enableLinting}
+                            type="button"
+                            variant={lintingEnabled ? "secondary" : "outline"}
+                        >
+                            Enable
+                        </Button>
+                        <Button
+                            onClick={disableLinting}
+                            type="button"
+                            variant={!lintingEnabled ? "secondary" : "outline"}
+                        >
+                            Disable
+                        </Button>
+                    </div>
+                    <DialogFooter>
+                        <Button
+                            variant="destructive"
+                            type="button"
+                            onClick={() => setShowConfigMenu(false)}
+                        >
+                            Close
+                        </Button>
+                    </DialogFooter>
+                </DialogContent>
+            </Dialog>
         </div>
     );
 }

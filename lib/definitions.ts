@@ -2,10 +2,10 @@ import * as monaco from "monaco-editor";
 
 export type Session = {
     id: string;
-    name: string;
     language: "typescript" | "javascript" | "css";
     code: string;
     createdAt: string;
+    lintingEnabled: boolean;
 };
 
 export type ConnectedClient = {
