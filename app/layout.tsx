@@ -30,19 +30,19 @@ export default function RootLayout({
             <body
                 className={`${geistSans.variable} ${geistMono.variable} antialiased`}
             >
-                <main className="w-screen h-screen overflow-hidden">
+                <ThemeProvider
+                    attribute="class"
+                    defaultTheme="system"
+                    enableSystem
+                    disableTransitionOnChange
+                >
                     <QueryClientProvider>
-                        <ThemeProvider
-                            attribute="class"
-                            defaultTheme="system"
-                            enableSystem
-                            disableTransitionOnChange
-                        >
+                        <main className="w-screen h-screen overflow-hidden">
                             {children}
-                        </ThemeProvider>
+                            <Toaster />
+                        </main>
                     </QueryClientProvider>
-                    <Toaster />
-                </main>
+                </ThemeProvider>
             </body>
         </html>
     );

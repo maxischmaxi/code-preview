@@ -5,6 +5,7 @@ export type Session = {
     name: string;
     language: "typescript" | "javascript" | "css";
     code: string;
+    createdAt: string;
 };
 
 export type ConnectedClient = {

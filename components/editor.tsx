@@ -7,7 +7,7 @@ import { Editor as MonacoEditor } from "@monaco-editor/react";
 import { useEffect, useState } from "react";
 import { Badge } from "./ui/badge";
 import { ModeToggle } from "./mode-toggle";
-import { Copy } from "lucide-react";
+import { Copy, Loader } from "lucide-react";
 import { useTheme } from "next-themes";
 import { socket } from "@/lib/socket";
 import { Button } from "./ui/button";
@@ -140,6 +140,14 @@ export function Editor({ id }: Props) {
         );
     }
 
+    if (session.isLoading) {
+        return (
+            <div className="w-full h-full flex flex-col flex-nowrap justify-center items-center">
+                <Loader />
+            </div>
+        );
+    }
+
     return (
         <div className="w-full h-full flex flex-col flex-nowrap">
             <header className="p-4 flex flex-row flex-nowrap justify-between items-center">
@@ -189,9 +197,6 @@ export function Editor({ id }: Props) {
                 language={language}
                 value={value}
                 defaultLanguage="typescript"
-                onMount={(editor) => {
-                    console.log("editor", editor);
-                }}
                 beforeMount={(monaco) => {
                     monaco.languages.typescript.typescriptDefaults.setCompilerOptions(
                         {
