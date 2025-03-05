@@ -5,6 +5,7 @@ import api from "@/lib/api";
 import { Session } from "@/lib/definitions";
 import { useMutation } from "@tanstack/react-query";
 import { useRouter } from "next/navigation";
+import { toast } from "sonner";
 
 export default function Home() {
     const router = useRouter();
@@ -15,6 +16,9 @@ export default function Home() {
         },
         onSuccess(session: Session) {
             router.push(`/${session.id}`);
+        },
+        onError() {
+            toast("Failed to create session");
         },
     });
 

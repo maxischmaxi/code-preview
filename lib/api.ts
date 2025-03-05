@@ -1,9 +1,7 @@
 import { Session } from "./definitions";
 
-const base = process.env.API_GATEWAY;
-
 export function createUrl(path: string) {
-    return `${base}${path}`;
+    return `https://${process.env.NEXT_PUBLIC_API_GATEWAY}${path}`;
 }
 
 async function createSession(): Promise<Session> {
