@@ -247,6 +247,7 @@ export function Editor({ id }: Props) {
                             session.isPending ||
                             session.isError,
                     ),
+                    theme: theme === "dark" ? "vs-dark" : "vs",
                     minimap: { enabled: false },
                     suggest: { preview: false },
                     tabSize: 4,
