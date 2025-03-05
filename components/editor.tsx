@@ -8,7 +8,6 @@ import { useEffect, useState } from "react";
 import { Badge } from "./ui/badge";
 import { ModeToggle } from "./mode-toggle";
 import { Copy, Loader } from "lucide-react";
-import { useTheme } from "next-themes";
 import { socket } from "@/lib/socket";
 import { Button } from "./ui/button";
 import { Session } from "@/lib/definitions";
@@ -20,7 +19,6 @@ type Props = {
 export function Editor({ id }: Props) {
     const [language, setLanguage] = useState<Session["language"]>("typescript");
     const session = useQueryGetSession(id);
-    const { theme } = useTheme();
     const [value, setValue] = useState("");
     const [connectedClients, setConnectedClients] = useState<{ id: string }[]>(
         [],
@@ -193,7 +191,7 @@ export function Editor({ id }: Props) {
                 wrapperProps={{ id: "editor" }}
                 onChange={onTextInputHandler}
                 loading={session.isLoading}
-                theme={theme === "dark" ? "vs-dark" : "vs"}
+                theme="vs-dark"
                 language={language}
                 value={value}
                 defaultLanguage="typescript"
@@ -247,7 +245,7 @@ export function Editor({ id }: Props) {
                             session.isPending ||
                             session.isError,
                     ),
-                    theme: theme === "dark" ? "vs-dark" : "vs",
+                    theme: "vs-dark",
                     minimap: { enabled: false },
                     suggest: { preview: false },
                     tabSize: 4,
