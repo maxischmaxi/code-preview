@@ -1,6 +1,6 @@
 import { clsx, type ClassValue } from "clsx";
 import { twMerge } from "tailwind-merge";
-import { EditorType, Templates } from "./definitions";
+import { Templates } from "./definitions";
 
 export function cn(...inputs: ClassValue[]) {
     return twMerge(clsx(inputs));
@@ -404,54 +404,3 @@ function calculate_crop_start_position(
         language: "php",
     },
 };
-
-export function setMonacoEditorOptions(
-    monaco: EditorType,
-    lintingEnabled: boolean,
-) {
-    if (!lintingEnabled) {
-        monaco.languages.typescript.typescriptDefaults.setCompilerOptions({
-            target: monaco.languages.typescript.ScriptTarget.ES2020,
-        });
-
-        monaco.languages.typescript.typescriptDefaults.setDiagnosticsOptions({
-            noSemanticValidation: true,
-            noSyntaxValidation: true,
-        });
-
-        monaco.languages.typescript.javascriptDefaults.setDiagnosticsOptions({
-            noSemanticValidation: true,
-            noSyntaxValidation: true,
-        });
-
-        monaco.languages.json.jsonDefaults.setDiagnosticsOptions({
-            validate: false,
-        });
-
-        monaco.languages.css.cssDefaults.setOptions({
-            validate: false,
-        });
-    } else {
-        monaco.languages.typescript.typescriptDefaults.setCompilerOptions({
-            target: monaco.languages.typescript.ScriptTarget.ES2020,
-        });
-
-        monaco.languages.typescript.typescriptDefaults.setDiagnosticsOptions({
-            noSemanticValidation: false,
-            noSyntaxValidation: false,
-        });
-
-        monaco.languages.typescript.javascriptDefaults.setDiagnosticsOptions({
-            noSemanticValidation: false,
-            noSyntaxValidation: false,
-        });
-
-        monaco.languages.json.jsonDefaults.setDiagnosticsOptions({
-            validate: true,
-        });
-
-        monaco.languages.css.cssDefaults.setOptions({
-            validate: true,
-        });
-    }
-}

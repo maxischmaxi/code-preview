@@ -39,6 +39,3 @@ export type Templates = {
         solution: string | null;
     };
 };
-
-export type EditorType =
-    typeof import("/Users/max/code/code-preview/node_modules/monaco-editor/esm/vs/editor/editor.api");

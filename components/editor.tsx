@@ -2,14 +2,14 @@
 
 import { toast } from "sonner";
 import copy from "copy-to-clipboard";
-import { Editor as MonacoEditor } from "@monaco-editor/react";
+import { Monaco, Editor as MonacoEditor } from "@monaco-editor/react";
 import { useEffect, useRef, useState } from "react";
 import { Badge } from "./ui/badge";
 import { ModeToggle } from "./mode-toggle";
 import { Copy } from "lucide-react";
 import { socket } from "@/lib/socket";
 import { Button } from "./ui/button";
-import { EditorType, Session, Templates } from "@/lib/definitions";
+import { Session, Templates } from "@/lib/definitions";
 import {
     Dialog,
     DialogContent,
@@ -18,16 +18,60 @@ import {
     DialogHeader,
     DialogTitle,
 } from "./ui/dialog";
-import {
-    setMonacoEditorOptions,
-    templates,
-    templateToString,
-} from "@/lib/utils";
+import { templates, templateToString } from "@/lib/utils";
 import { Tooltip, TooltipContent, TooltipTrigger } from "./ui/tooltip";
 
 type Props = {
     session: Session;
 };
+
+function setMonacoEditorOptions(monaco: Monaco, lintingEnabled: boolean) {
+    if (!lintingEnabled) {
+        monaco.languages.typescript.typescriptDefaults.setCompilerOptions({
+            target: monaco.languages.typescript.ScriptTarget.ES2020,
+        });
+
+        monaco.languages.typescript.typescriptDefaults.setDiagnosticsOptions({
+            noSemanticValidation: true,
+            noSyntaxValidation: true,
+        });
+
+        monaco.languages.typescript.javascriptDefaults.setDiagnosticsOptions({
+            noSemanticValidation: true,
+            noSyntaxValidation: true,
+        });
+
+        monaco.languages.json.jsonDefaults.setDiagnosticsOptions({
+            validate: false,
+        });
+
+        monaco.languages.css.cssDefaults.setOptions({
+            validate: false,
+        });
+    } else {
+        monaco.languages.typescript.typescriptDefaults.setCompilerOptions({
+            target: monaco.languages.typescript.ScriptTarget.ES2020,
+        });
+
+        monaco.languages.typescript.typescriptDefaults.setDiagnosticsOptions({
+            noSemanticValidation: false,
+            noSyntaxValidation: false,
+        });
+
+        monaco.languages.typescript.javascriptDefaults.setDiagnosticsOptions({
+            noSemanticValidation: false,
+            noSyntaxValidation: false,
+        });
+
+        monaco.languages.json.jsonDefaults.setDiagnosticsOptions({
+            validate: true,
+        });
+
+        monaco.languages.css.cssDefaults.setOptions({
+            validate: true,
+        });
+    }
+}
 
 export function Editor({ session }: Props) {
     const [language, setLanguage] = useState<Session["language"]>(
@@ -41,7 +85,7 @@ export function Editor({ session }: Props) {
     const [lintingEnabled, setLintingEnabled] = useState(
         session.lintingEnabled,
     );
-    const monacoRef = useRef<EditorType>(null);
+    const monacoRef = useRef<Monaco>(null);
 
     useEffect(() => {
         if (!monacoRef.current) return;
