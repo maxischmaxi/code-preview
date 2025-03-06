@@ -2,7 +2,7 @@ import * as monaco from "monaco-editor";
 
 export type Session = {
     id: string;
-    language: "typescript" | "javascript" | "css";
+    language: string;
     code: string;
     createdAt: string;
     lintingEnabled: boolean;
@@ -31,3 +31,14 @@ export type OnClientLeftSession = {
     sessionId: string;
     socketId: string;
 };
+
+export type Templates = {
+    [key: string]: {
+        code: string;
+        language: string;
+        solution: string | null;
+    };
+};
+
+export type EditorType =
+    typeof import("/Users/max/code/code-preview/node_modules/monaco-editor/esm/vs/editor/editor.api");

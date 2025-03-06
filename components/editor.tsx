@@ -3,13 +3,13 @@
 import { toast } from "sonner";
 import copy from "copy-to-clipboard";
 import { Editor as MonacoEditor } from "@monaco-editor/react";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Badge } from "./ui/badge";
 import { ModeToggle } from "./mode-toggle";
 import { Copy } from "lucide-react";
 import { socket } from "@/lib/socket";
 import { Button } from "./ui/button";
-import { Session } from "@/lib/definitions";
+import { EditorType, Session, Templates } from "@/lib/definitions";
 import {
     Dialog,
     DialogContent,
@@ -18,6 +18,12 @@ import {
     DialogHeader,
     DialogTitle,
 } from "./ui/dialog";
+import {
+    setMonacoEditorOptions,
+    templates,
+    templateToString,
+} from "@/lib/utils";
+import { Tooltip, TooltipContent, TooltipTrigger } from "./ui/tooltip";
 
 type Props = {
     session: Session;
@@ -35,6 +41,12 @@ export function Editor({ session }: Props) {
     const [lintingEnabled, setLintingEnabled] = useState(
         session.lintingEnabled,
     );
+    const monacoRef = useRef<EditorType>(null);
+
+    useEffect(() => {
+        if (!monacoRef.current) return;
+        setMonacoEditorOptions(monacoRef.current, lintingEnabled);
+    }, [lintingEnabled]);
 
     useEffect(() => {
         if (lintingEnabled) {
@@ -131,12 +143,11 @@ export function Editor({ session }: Props) {
 
     function onTextInputHandler(value: string | undefined) {
         if (!value) {
-            socket.emit("text-input", { id: session.id, text: "", language });
+            socket.emit("text-input", { id: session.id, text: "" });
         } else {
             socket.emit("text-input", {
                 id: session.id,
                 text: value,
-                language,
             });
         }
     }
@@ -165,7 +176,17 @@ export function Editor({ session }: Props) {
         });
     }
 
-    console.log(session);
+    function selectTemplate(template: keyof Templates) {
+        const { code, language } = templates[template];
+        socket.emit("text-input", { id: session.id, text: code });
+        socket.emit("language-change", {
+            id: session.id,
+            language,
+        });
+        setCode(code);
+        setLanguage(language);
+        setShowConfigMenu(false);
+    }
 
     return (
         <div className="w-full h-full flex flex-col flex-nowrap">
@@ -186,40 +207,13 @@ export function Editor({ session }: Props) {
             <MonacoEditor
                 wrapperProps={{ id: "editor" }}
                 onChange={onTextInputHandler}
-                onMount={(editor) => {
-                    console.log(editor);
-                }}
                 theme="vs-dark"
                 language={language}
                 value={code}
                 beforeMount={(monaco) => {
-                    if (!lintingEnabled) {
-                        monaco.languages.typescript.typescriptDefaults.setCompilerOptions(
-                            {
-                                target: monaco.languages.typescript.ScriptTarget
-                                    .ES2020,
-                            },
-                        );
-
-                        monaco.languages.typescript.typescriptDefaults.setDiagnosticsOptions(
-                            {
-                                noSemanticValidation: true,
-                                noSyntaxValidation: true,
-                            },
-                        );
-
-                        monaco.languages.json.jsonDefaults.setDiagnosticsOptions(
-                            {
-                                validate: false,
-                            },
-                        );
-
-                        monaco.languages.css.cssDefaults.setOptions({
-                            validate: false,
-                        });
-                    }
+                    monacoRef.current = monaco;
+                    setMonacoEditorOptions(monaco, lintingEnabled);
                 }}
-                onValidate={console.log}
                 options={{
                     "semanticHighlighting.enabled": lintingEnabled,
                     codeLens: lintingEnabled,
@@ -259,6 +253,58 @@ export function Editor({ session }: Props) {
                             Here you can configure the editor
                         </DialogDescription>
                     </DialogHeader>
+                    <p>Templates</p>
+                    <ul className="flex flex-col flex-nowrap gap-2 overflow-y-auto max-h-[500px]">
+                        {Object.keys(templates).map((template, index) => (
+                            <li
+                                key={index}
+                                className="flex flex-row flex-nowrap max-w-full w-full gap-4"
+                            >
+                                <Button
+                                    key={index}
+                                    variant="outline"
+                                    className="w-[80%] cursor-pointer"
+                                    type="button"
+                                    size="sm"
+                                    onClick={() =>
+                                        selectTemplate(
+                                            template as keyof Templates,
+                                        )
+                                    }
+                                >
+                                    {templateToString(template)}
+                                </Button>
+                                <Tooltip>
+                                    <TooltipTrigger asChild>
+                                        <Button
+                                            type="button"
+                                            size="sm"
+                                            variant="outline"
+                                            className="shrink-0 cursor-pointer"
+                                            onClick={() => {
+                                                const text =
+                                                    templates[
+                                                        template as keyof Templates
+                                                    ].solution;
+                                                if (!text) return;
+
+                                                copy(text);
+                                                toast(
+                                                    "Copied solution to clipboard",
+                                                );
+                                            }}
+                                        >
+                                            <Copy />
+                                        </Button>
+                                    </TooltipTrigger>
+                                    <TooltipContent>
+                                        Copy {templateToString(template)}{" "}
+                                        solution to clipboard
+                                    </TooltipContent>
+                                </Tooltip>
+                            </li>
+                        ))}
+                    </ul>
                     <p>
                         Select the language you want to use for the editor. This
                         will change the syntax highlighting.
