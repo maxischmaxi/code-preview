@@ -1,12 +1,24 @@
 import { Session } from "./definitions";
+import { getId } from "./id";
+import { getApiGateway } from "./utils";
 
 export function createUrl(path: string) {
-    return `https://${process.env.NEXT_PUBLIC_API_GATEWAY}${path}`;
+    const apiGateway = getApiGateway();
+    if (process.env.NODE_ENV === "development") {
+        return `${apiGateway}${path}`;
+    }
+    return `${apiGateway}${path}`;
 }
 
 async function createSession(): Promise<Session> {
     const res = await fetch(createUrl("/session"), {
         method: "POST",
+        body: JSON.stringify({
+            id: getId(),
+        }),
+        headers: {
+            "Content-Type": "application/json",
+        },
     });
 
     if (!res.ok) {

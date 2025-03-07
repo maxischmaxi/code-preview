@@ -134,3 +134,9 @@ body.hide-suggestions {
         height: 0 !important;
     }
 }
+
+.monaco-editor,
+.monaco-editor .monaco-editor-background,
+.monaco-editor .margin {
+    background-color: var(--background) !important;
+}

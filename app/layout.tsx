@@ -4,6 +4,7 @@ import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
 import { ThemeProvider } from "@/components/theme-provider";
 import { Footer } from "@/components/footer";
+import { SocketProvider } from "@/components/socket-provider";
 
 const geistSans = Geist({
     variable: "--font-geist-sans",
@@ -71,7 +72,7 @@ export default function RootLayout({
                 >
                     <div className="flex flex-col flex-nowrap w-screen h-screen">
                         <main className="w-screen h-screen overflow-hidden">
-                            {children}
+                            <SocketProvider>{children}</SocketProvider>
                             <Toaster />
                         </main>
                         <Footer />

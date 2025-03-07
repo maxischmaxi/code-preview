@@ -1,19 +1,30 @@
-import * as monaco from "monaco-editor";
+export enum SocketEvent {
+    JOIN_SESSION = "join-session",
+    JOIN = "join",
+    LEAVE_SESSION = "leave-session",
+    SET_SOLUTION = "set-solution",
+    TEXT_INPUT = "text-input",
+    LANGUAGE_CHANGE = "language-change",
+    SET_ADMIN = "set-admin",
+    REMOVE_ADMIN = "remove-admin",
+    LINTING_UPDATE = "linting-update",
+}
 
 export type Session = {
     id: string;
     language: string;
     code: string;
+    solution: string;
     createdAt: string;
+    createdBy: string;
+    admins: string[];
     lintingEnabled: boolean;
 };
 
 export type ConnectedClient = {
     socketId: string;
-    id: string | null;
-    cursorPosition: CursorPosition | null;
-    cursorSelection: monaco.Selection | null;
     sessionId: string | null;
+    userId: string;
 };
 
 export type CursorPosition = {
@@ -32,10 +43,10 @@ export type OnClientLeftSession = {
     socketId: string;
 };
 
-export type Templates = {
-    [key: string]: {
-        code: string;
-        language: string;
-        solution: string | null;
-    };
+export type Template = {
+    code: string;
+    title: string;
+    id: string;
+    solution: string;
+    language: string;
 };
