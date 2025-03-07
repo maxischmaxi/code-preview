@@ -229,8 +229,10 @@ export function Editor({ session, templates }: Props) {
     useEffect(() => {
         function onKeyDown(e: KeyboardEvent) {
             if (e.metaKey && e.key === ",") {
-                e.preventDefault();
-                setShowConfigMenu((prev) => !prev);
+                if (id === session.createdBy || admins.includes(id)) {
+                    e.preventDefault();
+                    setShowConfigMenu((prev) => !prev);
+                }
             }
 
             if (e.metaKey && e.key === "s") {
@@ -238,12 +240,10 @@ export function Editor({ session, templates }: Props) {
             }
         }
 
-        if (id === session.createdBy || admins.includes(id)) {
-            window.addEventListener("keydown", onKeyDown);
-            return () => {
-                window.removeEventListener("keydown", onKeyDown);
-            };
-        }
+        window.addEventListener("keydown", onKeyDown);
+        return () => {
+            window.removeEventListener("keydown", onKeyDown);
+        };
     }, [admins, session.createdBy]);
 
     function copyToClipboard() {
