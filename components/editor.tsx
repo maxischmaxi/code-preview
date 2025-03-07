@@ -72,14 +72,12 @@ export function Editor({ session, templates }: Props) {
 
     const updateCursors = useCallback(
         (positions: Array<Omit<CursorPosition, "sessionId">>) => {
-            if (!editorRef.current) {
-                return;
-            }
             if (!decorationsRef.current) {
                 return;
             }
 
             const newDecorations = positions
+                .filter((p) => p.userId !== id)
                 .map((cursor) => {
                     if (!editorRef.current) {
                         return null;
@@ -95,11 +93,11 @@ export function Editor({ session, templates }: Props) {
                         options: {
                             className: "multi-cursor",
                             inWholeLine: false,
-                            afterContentClassName: admins.includes(
-                                cursor.userId,
-                            )
-                                ? "cursor-label-admin"
-                                : "cursor-label-default",
+                            afterContentClassName:
+                                admins.includes(cursor.userId) ||
+                                cursor.userId === session.createdBy
+                                    ? "cursor-label-admin"
+                                    : "cursor-label-default",
                         },
                     };
                 })
@@ -108,7 +106,7 @@ export function Editor({ session, templates }: Props) {
             // @ts-expect-error - Property 'set' does not exist on type 'DecorationsCollection'.
             decorationsRef.current.set(newDecorations);
         },
-        [admins],
+        [admins, session.createdBy],
     );
 
     useEffect(() => {
@@ -157,20 +155,8 @@ export function Editor({ session, templates }: Props) {
             setSolutionPresented(data);
         }
 
-        function onCursorPositionHandler(data: CursorPosition) {
-            setCursorPositions((prev) => {
-                const index = prev.findIndex(
-                    (cursor) => cursor.userId === data.userId,
-                );
-
-                if (index === -1) {
-                    return [...prev, data];
-                }
-
-                return prev.map((cursor) =>
-                    cursor.userId === data.userId ? data : cursor,
-                );
-            });
+        function onCursorPositionHandler(data: CursorPosition[]) {
+            setCursorPositions(data);
         }
 
         socket.on(SocketEvent.JOIN_SESSION, onClientsHandler);
@@ -216,11 +202,21 @@ export function Editor({ session, templates }: Props) {
             }
         }
 
+        function onBlur() {
+            socket.emit(SocketEvent.REMOVE_CURSOR_POISITON, {
+                sessionId: session.id,
+                userId: id,
+            });
+        }
+
         window.addEventListener("keydown", onKeyDown);
+        window.addEventListener("blur", onBlur);
+
         return () => {
             window.removeEventListener("keydown", onKeyDown);
+            window.removeEventListener("blur", onBlur);
         };
-    }, [admins, session.createdBy]);
+    }, [admins, session.createdBy, session.id]);
 
     function copyToClipboard() {
         const domain = window.location.origin;
@@ -422,6 +418,7 @@ export function Editor({ session, templates }: Props) {
                                 updateCursors(cursorPositions);
                             }}
                             beforeMount={(monaco) => {
+                                editorRef.current = monaco;
                                 monaco.languages.typescript.typescriptDefaults.setCompilerOptions(
                                     {
                                         target: monaco.languages.typescript
@@ -607,7 +604,6 @@ export function Editor({ session, templates }: Props) {
                                 <MonacoEditor
                                     theme={theme}
                                     beforeMount={(monaco) => {
-                                        editorRef.current = monaco;
                                         monaco.languages.typescript.typescriptDefaults.setCompilerOptions(
                                             {
                                                 target: monaco.languages

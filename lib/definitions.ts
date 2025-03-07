@@ -9,6 +9,7 @@ export enum SocketEvent {
     REMOVE_ADMIN = "remove-admin",
     SOLUTION_PRESENTED = "solution-presented",
     SEND_CURSOR_POSITION = "send-cursor-position",
+    REMOVE_CURSOR_POISITON = "remove-cursor-position",
 }
 
 export type CursorPosition = {
