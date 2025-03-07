@@ -125,18 +125,48 @@
     }
 }
 
-body.hide-suggestions {
-    .overflowingOverlayWidgets,
-    .suggest-widget {
-        display: none !important;
-        visibility: hidden !important;
-        width: 0 !important;
-        height: 0 !important;
-    }
-}
+/* body.hide-suggestions { */
+/*     .overflowingOverlayWidgets, */
+/*     .suggest-widget { */
+/*         display: none !important; */
+/*         visibility: hidden !important; */
+/*         width: 0 !important; */
+/*         height: 0 !important; */
+/*     } */
+/* } */
 
 .monaco-editor,
 .monaco-editor .monaco-editor-background,
 .monaco-editor .margin {
     background-color: var(--background) !important;
+}
+
+.multi-cursor::before {
+    content: "";
+    position: absolute;
+    width: 4px;
+    height: 1.5em;
+    background: blue;
+}
+
+.cursor-label-default::after {
+    content: " Bewerber";
+    color: white;
+    background: blue;
+    padding: 2px 5px;
+    border-radius: 3px;
+    font-size: 8px;
+    position: absolute;
+    top: -15px;
+}
+
+.cursor-label-admin::after {
+    content: " Admin";
+    color: black;
+    background: yellow;
+    padding: 2px 5px;
+    border-radius: 3px;
+    font-size: 8px;
+    position: absolute;
+    top: -15px;
 }

@@ -7,7 +7,6 @@ import {
     DialogTitle,
     DialogDescription,
     DialogContent,
-    DialogFooter,
 } from "./ui/dialog";
 import { Button } from "./ui/button";
 import { Template } from "@/lib/definitions";
@@ -18,16 +17,10 @@ type Props = {
     templates: Template[];
     setOpen: Dispatch<SetStateAction<boolean>>;
     selectTemplate: (id: string) => void;
-    disableLinting: () => void;
-    enableLinting: () => void;
-    lintingEnabled: boolean;
 };
 
-export function ConfigMenuDialog({
+export function TemplateDialog({
     templates,
-    enableLinting,
-    disableLinting,
-    lintingEnabled,
     open,
     setOpen,
     selectTemplate,
@@ -42,12 +35,11 @@ export function ConfigMenuDialog({
             <Dialog open={open} onOpenChange={setOpen}>
                 <DialogContent>
                     <DialogHeader>
-                        <DialogTitle>Config</DialogTitle>
+                        <DialogTitle>Templates</DialogTitle>
                         <DialogDescription>
-                            Here you can configure the editor
+                            Select a template to start coding
                         </DialogDescription>
                     </DialogHeader>
-                    <p>Templates</p>
                     <ul className="flex flex-col flex-nowrap gap-2 overflow-y-auto max-h-[500px]">
                         {templates.map((template, index) => (
                             <li
@@ -78,32 +70,6 @@ export function ConfigMenuDialog({
                             </li>
                         ))}
                     </ul>
-                    <p>Linting: {lintingEnabled ? "Enabled" : "Disabled"}</p>
-                    <div className="flex flex-row flex-nowrap gap-4">
-                        <Button
-                            onClick={enableLinting}
-                            type="button"
-                            variant={lintingEnabled ? "secondary" : "outline"}
-                        >
-                            Enable
-                        </Button>
-                        <Button
-                            onClick={disableLinting}
-                            type="button"
-                            variant={!lintingEnabled ? "secondary" : "outline"}
-                        >
-                            Disable
-                        </Button>
-                    </div>
-                    <DialogFooter>
-                        <Button
-                            variant="destructive"
-                            type="button"
-                            onClick={() => setOpen(false)}
-                        >
-                            Close
-                        </Button>
-                    </DialogFooter>
                 </DialogContent>
             </Dialog>
             {selectedTemplate && (

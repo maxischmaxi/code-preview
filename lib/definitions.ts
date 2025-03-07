@@ -7,8 +7,18 @@ export enum SocketEvent {
     LANGUAGE_CHANGE = "language-change",
     SET_ADMIN = "set-admin",
     REMOVE_ADMIN = "remove-admin",
-    LINTING_UPDATE = "linting-update",
+    SOLUTION_PRESENTED = "solution-presented",
+    SEND_CURSOR_POSITION = "send-cursor-position",
 }
+
+export type CursorPosition = {
+    sessionId: string;
+    userId: string;
+    cursor: {
+        column: number;
+        lineNumber: number;
+    };
+};
 
 export type Session = {
     id: string;
@@ -18,18 +28,13 @@ export type Session = {
     createdAt: string;
     createdBy: string;
     admins: string[];
-    lintingEnabled: boolean;
+    solutionPresented: boolean;
 };
 
 export type ConnectedClient = {
     socketId: string;
     sessionId: string | null;
     userId: string;
-};
-
-export type CursorPosition = {
-    lineNumber: number;
-    column: number;
 };
 
 export type OnClientJoinedSession = {

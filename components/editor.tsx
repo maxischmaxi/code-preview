@@ -13,14 +13,22 @@
 import { PanelGroup, Panel, PanelResizeHandle } from "react-resizable-panels";
 import { toast } from "sonner";
 import copy from "copy-to-clipboard";
-import MonacoEditor, { Monaco } from "@monaco-editor/react";
+import { Monaco, Editor as MonacoEditor } from "@monaco-editor/react";
 import { use, useCallback, useEffect, useRef, useState } from "react";
 import { Badge } from "./ui/badge";
 import { ModeToggle } from "./mode-toggle";
-import { CodeIcon, Copy, Plus, Settings, Users } from "lucide-react";
+import {
+    CodeIcon,
+    Copy,
+    Plus,
+    Presentation,
+    Settings,
+    Users,
+} from "lucide-react";
 import { Button } from "./ui/button";
 import {
     ConnectedClient,
+    CursorPosition,
     Session,
     SocketEvent,
     Template,
@@ -28,10 +36,11 @@ import {
 import { getId } from "@/lib/id";
 import { useEditorTheme } from "@/hooks/useEditorTheme";
 import { socket, SocketContext } from "./socket-provider";
-import { ConfigMenuDialog } from "./config-menu-dialog";
+import { TemplateDialog } from "./template-dialog";
 import { UserPanel } from "./user-panel";
 import { Tooltip, TooltipContent, TooltipTrigger } from "./ui/tooltip";
 import { NewTemplateDialog } from "./new-template-dialog";
+import { cn } from "@/lib/utils";
 
 type Props = {
     session: Session;
@@ -43,125 +52,64 @@ const id = getId();
 export function Editor({ session, templates }: Props) {
     const theme = useEditorTheme();
     const { ready } = use(SocketContext);
-    const [language, setLanguage] = useState<Session["language"]>(
-        session.language,
-    );
+    const [lang, setLang] = useState<Session["language"]>(session.language);
     const [code, setCode] = useState(session.code);
     const [solution, setSolution] = useState(session.solution);
-    const [connectedClients, setConnectedClients] = useState<ConnectedClient[]>(
-        [],
-    );
+    const [clients, setClients] = useState<ConnectedClient[]>([]);
     const [showConfigMenu, setShowConfigMenu] = useState(false);
-    const [lintingEnabled, setLintingEnabled] = useState(
-        session.lintingEnabled,
-    );
-    const monacoRef = useRef<Monaco>(null);
     const [admins, setAdmins] = useState<string[]>(session.admins);
     const [showSolution, setShowSolution] = useState(id === session.createdBy);
     const [showUsers, setShowUsers] = useState(false);
     const [showNewTemplateDialog, setShowNewTemplateDialog] = useState(false);
-
-    console.log(session);
-
-    const setPreviewEditorOptions = useCallback((monaco: Monaco) => {
-        monaco.languages.typescript.typescriptDefaults.setCompilerOptions({
-            target: monaco.languages.typescript.ScriptTarget.ES2020,
-        });
-
-        monaco.languages.typescript.typescriptDefaults.setDiagnosticsOptions({
-            noSemanticValidation: false,
-            noSyntaxValidation: false,
-        });
-
-        monaco.languages.typescript.javascriptDefaults.setDiagnosticsOptions({
-            noSemanticValidation: false,
-            noSyntaxValidation: false,
-        });
-
-        monaco.languages.json.jsonDefaults.setDiagnosticsOptions({
-            validate: true,
-        });
-
-        monaco.languages.css.cssDefaults.setOptions({
-            validate: true,
-        });
-    }, []);
-
-    const setMonacoEditorOptions = useCallback(
-        (monaco: Monaco, lintingEnabled: boolean) => {
-            if (!lintingEnabled) {
-                monaco.languages.typescript.typescriptDefaults.setCompilerOptions(
-                    {
-                        target: monaco.languages.typescript.ScriptTarget.ES2020,
-                    },
-                );
-
-                monaco.languages.typescript.typescriptDefaults.setDiagnosticsOptions(
-                    {
-                        noSemanticValidation: true,
-                        noSyntaxValidation: true,
-                    },
-                );
-
-                monaco.languages.typescript.javascriptDefaults.setDiagnosticsOptions(
-                    {
-                        noSemanticValidation: true,
-                        noSyntaxValidation: true,
-                    },
-                );
-
-                monaco.languages.json.jsonDefaults.setDiagnosticsOptions({
-                    validate: false,
-                });
-
-                monaco.languages.css.cssDefaults.setOptions({
-                    validate: false,
-                });
-            } else {
-                monaco.languages.typescript.typescriptDefaults.setCompilerOptions(
-                    {
-                        target: monaco.languages.typescript.ScriptTarget.ES2020,
-                    },
-                );
-
-                monaco.languages.typescript.typescriptDefaults.setDiagnosticsOptions(
-                    {
-                        noSemanticValidation: false,
-                        noSyntaxValidation: false,
-                    },
-                );
-
-                monaco.languages.typescript.javascriptDefaults.setDiagnosticsOptions(
-                    {
-                        noSemanticValidation: false,
-                        noSyntaxValidation: false,
-                    },
-                );
-
-                monaco.languages.json.jsonDefaults.setDiagnosticsOptions({
-                    validate: true,
-                });
-
-                monaco.languages.css.cssDefaults.setOptions({
-                    validate: true,
-                });
-            }
-        },
-        [],
+    const [solutionPresented, setSolutionPresented] = useState(
+        session.solutionPresented,
     );
+    const editorRef = useRef<Monaco | null>(null);
+    const decorationsRef = useRef(null);
+    const [cursorPositions, setCursorPositions] = useState<
+        Array<Omit<CursorPosition, "sessionId">>
+    >([]);
 
-    useEffect(() => {
-        if (!monacoRef.current) return;
-        setMonacoEditorOptions(monacoRef.current, lintingEnabled);
-    }, [lintingEnabled, setMonacoEditorOptions]);
+    const updateCursors = useCallback(
+        (positions: Array<Omit<CursorPosition, "sessionId">>) => {
+            if (!editorRef.current) {
+                return;
+            }
+            if (!decorationsRef.current) {
+                return;
+            }
 
-    useEffect(() => {
-        if (lintingEnabled) {
-            document.body.classList.remove("hide-suggestions");
-        } else {
-            document.body.classList.add("hide-suggestions");
-        }
-    }, [lintingEnabled]);
+            const newDecorations = positions
+                .map((cursor) => {
+                    if (!editorRef.current) {
+                        return null;
+                    }
+
+                    return {
+                        range: new editorRef.current.Range(
+                            cursor.cursor.lineNumber,
+                            cursor.cursor.column,
+                            cursor.cursor.lineNumber,
+                            cursor.cursor.column,
+                        ),
+                        options: {
+                            className: "multi-cursor",
+                            inWholeLine: false,
+                            afterContentClassName: admins.includes(
+                                cursor.userId,
+                            )
+                                ? "cursor-label-admin"
+                                : "cursor-label-default",
+                        },
+                    };
+                })
+                .filter(Boolean);
+
+            // @ts-expect-error - Property 'set' does not exist on type 'DecorationsCollection'.
+            decorationsRef.current.set(newDecorations);
+        },
+        [admins],
+    );
 
     useEffect(() => {
         if (ready) {
@@ -173,8 +121,12 @@ export function Editor({ session, templates }: Props) {
     }, [ready, session.id]);
 
     useEffect(() => {
+        updateCursors(cursorPositions);
+    }, [cursorPositions, updateCursors]);
+
+    useEffect(() => {
         function onClientsHandler(data: ConnectedClient[]) {
-            setConnectedClients(data);
+            setClients(data);
         }
 
         function onTextInputHandler(data: {
@@ -182,15 +134,11 @@ export function Editor({ session, templates }: Props) {
             language: Session["language"];
         }) {
             setCode(data.text);
-            setLanguage(data.language);
-        }
-
-        function onLintingUpdate(data: { lintingEnabled: boolean }) {
-            setLintingEnabled(data.lintingEnabled);
+            setLang(data.language);
         }
 
         function onLanguageChange(data: { language: Session["language"] }) {
-            setLanguage(data.language);
+            setLang(data.language);
         }
 
         function onSetAdminHandler(admins: string[]) {
@@ -205,24 +153,52 @@ export function Editor({ session, templates }: Props) {
             setSolution(data);
         }
 
+        function onSolutionPresentedHandler(data: boolean) {
+            setSolutionPresented(data);
+        }
+
+        function onCursorPositionHandler(data: CursorPosition) {
+            setCursorPositions((prev) => {
+                const index = prev.findIndex(
+                    (cursor) => cursor.userId === data.userId,
+                );
+
+                if (index === -1) {
+                    return [...prev, data];
+                }
+
+                return prev.map((cursor) =>
+                    cursor.userId === data.userId ? data : cursor,
+                );
+            });
+        }
+
         socket.on(SocketEvent.JOIN_SESSION, onClientsHandler);
         socket.on(SocketEvent.LEAVE_SESSION, onClientsHandler);
         socket.on(SocketEvent.TEXT_INPUT, onTextInputHandler);
-        socket.on(SocketEvent.LINTING_UPDATE, onLintingUpdate);
         socket.on(SocketEvent.LANGUAGE_CHANGE, onLanguageChange);
         socket.on(SocketEvent.SET_ADMIN, onSetAdminHandler);
         socket.on(SocketEvent.REMOVE_ADMIN, onRemoveAdminHandler);
         socket.on(SocketEvent.SET_SOLUTION, onSetSolutionHandler);
+        socket.on(SocketEvent.SOLUTION_PRESENTED, onSolutionPresentedHandler);
+        socket.on(SocketEvent.SEND_CURSOR_POSITION, onCursorPositionHandler);
 
         return () => {
             socket.off(SocketEvent.JOIN_SESSION, onClientsHandler);
             socket.off(SocketEvent.LEAVE_SESSION, onClientsHandler);
             socket.off(SocketEvent.TEXT_INPUT, onTextInputHandler);
-            socket.off(SocketEvent.LINTING_UPDATE, onLintingUpdate);
             socket.off(SocketEvent.LANGUAGE_CHANGE, onLanguageChange);
             socket.off(SocketEvent.SET_ADMIN, onSetAdminHandler);
             socket.off(SocketEvent.REMOVE_ADMIN, onRemoveAdminHandler);
             socket.off(SocketEvent.SET_SOLUTION, onSetSolutionHandler);
+            socket.off(
+                SocketEvent.SOLUTION_PRESENTED,
+                onSolutionPresentedHandler,
+            );
+            socket.off(
+                SocketEvent.SEND_CURSOR_POSITION,
+                onCursorPositionHandler,
+            );
         };
     }, []);
 
@@ -265,25 +241,7 @@ export function Editor({ session, templates }: Props) {
         }
     }
 
-    function enableLinting() {
-        setLintingEnabled(true);
-        socket.emit(SocketEvent.LINTING_UPDATE, {
-            sessionId: session.id,
-            lintingEnabled: true,
-            userId: id,
-        });
-    }
-
-    function disableLinting() {
-        setLintingEnabled(false);
-        socket.emit(SocketEvent.LINTING_UPDATE, {
-            sessionId: session.id,
-            lintingEnabled: false,
-            userId: id,
-        });
-    }
-
-    function selectTemplate(templateId: string) {
+    function setTemplate(templateId: string) {
         const template = templates.find((t) => t.id === templateId);
 
         if (!template) {
@@ -297,16 +255,11 @@ export function Editor({ session, templates }: Props) {
             templateId: templateId,
         });
 
-        socket.emit(SocketEvent.LINTING_UPDATE, {
-            sessionId: session.id,
-            language: template.language,
-            userId: id,
-        });
-
-        setCode(code);
-        setLanguage(language);
-        setShowConfigMenu(false);
+        setCode(template.code);
+        setLang(template.language);
         setSolution(template.solution);
+        setSolutionPresented(false);
+        setShowConfigMenu(false);
     }
 
     function toggleUserAdmin(client: ConnectedClient) {
@@ -323,6 +276,14 @@ export function Editor({ session, templates }: Props) {
         }
     }
 
+    function presentSolution() {
+        setSolutionPresented(true);
+        socket.emit(SocketEvent.SOLUTION_PRESENTED, {
+            sessionId: session.id,
+            userId: id,
+        });
+    }
+
     return (
         <div className="w-full h-full flex flex-col flex-nowrap">
             <header className="p-4 flex flex-row flex-nowrap justify-between items-center border-b">
@@ -330,14 +291,31 @@ export function Editor({ session, templates }: Props) {
                     {session.id}
                     <Copy />
                 </Badge>
-                <div className="flex flex-row flex-nowrap gap-4">
+                <div className="flex flex-row flex-nowrap gap-4 items-center">
                     <div className="flex justify-center items-center py-2">
-                        <Badge variant="outline">
-                            {connectedClients.length}
-                        </Badge>
+                        <Badge variant="outline">{clients.length}</Badge>
                     </div>
                     {(id === session.createdBy || admins.includes(id)) && (
                         <>
+                            <Tooltip>
+                                <TooltipTrigger asChild>
+                                    <Button
+                                        type="button"
+                                        variant={
+                                            solutionPresented
+                                                ? "secondary"
+                                                : "outline"
+                                        }
+                                        disabled={solutionPresented}
+                                        className={cn(
+                                            solutionPresented && "bg-amber-600",
+                                        )}
+                                        onClick={presentSolution}
+                                    >
+                                        <Presentation />
+                                    </Button>
+                                </TooltipTrigger>
+                            </Tooltip>
                             <Tooltip>
                                 <TooltipTrigger asChild>
                                     <Button
@@ -418,63 +396,285 @@ export function Editor({ session, templates }: Props) {
                         <MonacoEditor
                             onChange={onTextInputHandler}
                             theme={theme}
-                            language={language}
+                            language={lang}
                             className="w-full h-full"
                             value={code}
+                            onMount={(editor) => {
+                                const decs =
+                                    editor.createDecorationsCollection();
+
+                                editor.onDidChangeCursorPosition((e) => {
+                                    socket.emit(
+                                        SocketEvent.SEND_CURSOR_POSITION,
+                                        {
+                                            sessionId: session.id,
+                                            userId: id,
+                                            cursor: {
+                                                column: e.position.column,
+                                                lineNumber:
+                                                    e.position.lineNumber,
+                                            },
+                                        },
+                                    );
+                                });
+                                // @ts-expect-error - Property 'current' does not exist on type 'null'.
+                                decorationsRef.current = decs;
+                                updateCursors(cursorPositions);
+                            }}
                             beforeMount={(monaco) => {
-                                monacoRef.current = monaco;
-                                setMonacoEditorOptions(monaco, lintingEnabled);
+                                monaco.languages.typescript.typescriptDefaults.setCompilerOptions(
+                                    {
+                                        target: monaco.languages.typescript
+                                            .ScriptTarget.ES2020,
+                                        allowJs: true,
+                                        checkJs: false,
+                                    },
+                                );
+
+                                monaco.languages.typescript.typescriptDefaults.setDiagnosticsOptions(
+                                    {
+                                        noSemanticValidation: true,
+                                        noSyntaxValidation: true,
+                                        noSuggestionDiagnostics: true,
+                                        onlyVisible: true,
+                                    },
+                                );
+
+                                monaco.languages.typescript.javascriptDefaults.setDiagnosticsOptions(
+                                    {
+                                        noSemanticValidation: true,
+                                        noSyntaxValidation: true,
+                                        onlyVisible: true,
+                                        noSuggestionDiagnostics: true,
+                                    },
+                                );
+
+                                monaco.languages.typescript.javascriptDefaults.setCompilerOptions(
+                                    {
+                                        allowJs: true,
+                                        target: monaco.languages.typescript
+                                            .ScriptTarget.ES2020,
+                                        checkJs: false,
+                                    },
+                                );
+
+                                monaco.languages.json.jsonDefaults.setDiagnosticsOptions(
+                                    {
+                                        validate: false,
+                                        schemaValidation: "ignore",
+                                        enableSchemaRequest: false,
+                                    },
+                                );
+
+                                monaco.languages.css.cssDefaults.setOptions({
+                                    validate: false,
+                                    lint: {
+                                        argumentsInColorFunction: "ignore",
+                                        boxModel: "ignore",
+                                        compatibleVendorPrefixes: "ignore",
+                                        duplicateProperties: "ignore",
+                                        emptyRules: "ignore",
+                                        float: "ignore",
+                                        fontFaceProperties: "ignore",
+                                        hexColorLength: "ignore",
+                                        idSelector: "ignore",
+
+                                        ieHack: "ignore",
+                                        important: "ignore",
+
+                                        importStatement: "ignore",
+                                        propertyIgnoredDueToDisplay: "ignore",
+                                        universalSelector: "ignore",
+                                        unknownProperties: "ignore",
+                                        unknownVendorSpecificProperties:
+                                            "ignore",
+                                        vendorPrefix: "ignore",
+                                        zeroUnits: "ignore",
+                                    },
+                                });
+
+                                monaco.languages.css.scssDefaults.setOptions({
+                                    validate: false,
+                                    lint: {
+                                        argumentsInColorFunction: "ignore",
+                                        boxModel: "ignore",
+                                        compatibleVendorPrefixes: "ignore",
+                                        duplicateProperties: "ignore",
+                                        emptyRules: "ignore",
+                                        float: "ignore",
+                                        fontFaceProperties: "ignore",
+                                        hexColorLength: "ignore",
+                                        idSelector: "ignore",
+
+                                        ieHack: "ignore",
+                                        important: "ignore",
+
+                                        importStatement: "ignore",
+                                        propertyIgnoredDueToDisplay: "ignore",
+                                        universalSelector: "ignore",
+                                        unknownProperties: "ignore",
+                                        unknownVendorSpecificProperties:
+                                            "ignore",
+                                        vendorPrefix: "ignore",
+                                        zeroUnits: "ignore",
+                                    },
+                                });
+
+                                monaco.languages.css.lessDefaults.setOptions({
+                                    validate: false,
+                                    lint: {
+                                        argumentsInColorFunction: "ignore",
+                                        boxModel: "ignore",
+                                        compatibleVendorPrefixes: "ignore",
+                                        duplicateProperties: "ignore",
+                                        emptyRules: "ignore",
+                                        float: "ignore",
+                                        fontFaceProperties: "ignore",
+                                        hexColorLength: "ignore",
+                                        idSelector: "ignore",
+
+                                        ieHack: "ignore",
+                                        important: "ignore",
+
+                                        importStatement: "ignore",
+                                        propertyIgnoredDueToDisplay: "ignore",
+                                        universalSelector: "ignore",
+                                        unknownProperties: "ignore",
+                                        unknownVendorSpecificProperties:
+                                            "ignore",
+                                        vendorPrefix: "ignore",
+                                        zeroUnits: "ignore",
+                                    },
+                                });
                             }}
                             options={{
-                                "semanticHighlighting.enabled": lintingEnabled,
-                                contextmenu: lintingEnabled,
-                                codeLens: lintingEnabled,
+                                "semanticHighlighting.enabled": false,
+                                contextmenu: false,
+                                codeLens: false,
                                 automaticLayout: true,
                                 theme,
                                 minimap: { enabled: false },
                                 hover: {
-                                    enabled: lintingEnabled,
+                                    enabled: false,
                                     delay: 250,
                                 },
                                 suggest: {
-                                    preview: lintingEnabled,
-                                    showWords: lintingEnabled,
+                                    preview: false,
+                                    showWords: false,
                                 },
                                 tabSize: 4,
                                 quickSuggestions: {
-                                    comments: lintingEnabled,
-                                    other: lintingEnabled,
-                                    strings: lintingEnabled,
+                                    comments: false,
+                                    other: false,
+                                    strings: false,
+                                },
+                                occurrencesHighlight: "off",
+                                showDeprecated: false,
+                                showUnused: false,
+                                showFoldingControls: "mouseover",
+                                lightbulb: {
+                                    // @ts-expect-error - Property 'enabled' does not exist on type 'boolean'.
+                                    enabled: "off",
+                                },
+                                inlineSuggest: {
+                                    enabled: false,
+                                },
+                                inlayHints: {
+                                    enabled: "off",
                                 },
                                 parameterHints: {
-                                    enabled: lintingEnabled,
+                                    enabled: false,
                                 },
-                                wordBasedSuggestions: lintingEnabled
+                                wordBasedSuggestions: false
                                     ? "currentDocument"
                                     : "off",
-                                suggestOnTriggerCharacters: lintingEnabled,
-                                acceptSuggestionOnEnter: lintingEnabled
-                                    ? "on"
-                                    : "off",
-                                tabCompletion: lintingEnabled ? "on" : "off",
+                                suggestOnTriggerCharacters: false,
+                                acceptSuggestionOnEnter: false ? "on" : "off",
+                                snippetSuggestions: "none",
+                                renderValidationDecorations: "off",
+                                tabCompletion: "off",
                                 formatOnPaste: false,
                                 formatOnType: false,
                                 padding: { top: 16, bottom: 16 },
-                                language,
+                                language: lang,
                             }}
                         />
                     </Panel>
-                    {showSolution && (
+                    {(showSolution || solutionPresented) && (
                         <>
                             <PanelResizeHandle className="w-1 bg-secondary" />
                             <Panel>
                                 <MonacoEditor
                                     theme={theme}
-                                    beforeMount={setPreviewEditorOptions}
+                                    beforeMount={(monaco) => {
+                                        editorRef.current = monaco;
+                                        monaco.languages.typescript.typescriptDefaults.setCompilerOptions(
+                                            {
+                                                target: monaco.languages
+                                                    .typescript.ScriptTarget
+                                                    .ES2020,
+                                            },
+                                        );
+
+                                        monaco.languages.typescript.typescriptDefaults.setDiagnosticsOptions(
+                                            {
+                                                noSemanticValidation: false,
+                                                noSyntaxValidation: false,
+                                            },
+                                        );
+
+                                        monaco.languages.typescript.javascriptDefaults.setDiagnosticsOptions(
+                                            {
+                                                noSemanticValidation: false,
+                                                noSyntaxValidation: false,
+                                            },
+                                        );
+
+                                        monaco.languages.json.jsonDefaults.setDiagnosticsOptions(
+                                            {
+                                                validate: true,
+                                            },
+                                        );
+
+                                        monaco.languages.css.cssDefaults.setOptions(
+                                            {
+                                                validate: true,
+                                            },
+                                        );
+                                    }}
                                     className="w-full h-full"
                                     value={solution}
+                                    language={lang}
                                     options={{
+                                        "semanticHighlighting.enabled": true,
+                                        contextmenu: true,
+                                        codeLens: true,
+                                        automaticLayout: true,
+                                        hover: {
+                                            enabled: true,
+                                            delay: 250,
+                                        },
+                                        suggest: {
+                                            preview: true,
+                                            showWords: true,
+                                        },
+                                        tabSize: 4,
+                                        quickSuggestions: {
+                                            comments: true,
+                                            other: true,
+                                            strings: true,
+                                        },
+                                        parameterHints: {
+                                            enabled: true,
+                                        },
+                                        wordBasedSuggestions: "currentDocument",
+                                        suggestOnTriggerCharacters: true,
+                                        acceptSuggestionOnEnter: "on",
+                                        tabCompletion: "on",
+                                        formatOnPaste: false,
+                                        formatOnType: false,
                                         theme,
+                                        language: lang,
                                         minimap: { enabled: false },
                                         readOnly: true,
                                         padding: { top: 16, bottom: 16 },
@@ -489,7 +689,7 @@ export function Editor({ session, templates }: Props) {
                             <Panel>
                                 <UserPanel
                                     admins={admins}
-                                    connectedClients={connectedClients}
+                                    connectedClients={clients}
                                     session={session}
                                     toggleUserAdmin={toggleUserAdmin}
                                 />
@@ -502,14 +702,11 @@ export function Editor({ session, templates }: Props) {
                 open={showNewTemplateDialog}
                 setOpen={setShowNewTemplateDialog}
             />
-            <ConfigMenuDialog
+            <TemplateDialog
                 open={showConfigMenu}
                 templates={templates}
-                selectTemplate={selectTemplate}
+                selectTemplate={setTemplate}
                 setOpen={setShowConfigMenu}
-                enableLinting={enableLinting}
-                lintingEnabled={lintingEnabled}
-                disableLinting={disableLinting}
             />
         </div>
     );
