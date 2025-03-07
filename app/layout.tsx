@@ -3,7 +3,7 @@ import { Toaster } from "@/components/ui/sonner";
 import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
 import { ThemeProvider } from "@/components/theme-provider";
-import { QueryClientProvider } from "@/context/query";
+import { Footer } from "@/components/footer";
 
 const geistSans = Geist({
     variable: "--font-geist-sans",
@@ -69,12 +69,13 @@ export default function RootLayout({
                     enableSystem
                     disableTransitionOnChange
                 >
-                    <QueryClientProvider>
+                    <div className="flex flex-col flex-nowrap w-screen h-screen">
                         <main className="w-screen h-screen overflow-hidden">
                             {children}
                             <Toaster />
                         </main>
-                    </QueryClientProvider>
+                        <Footer />
+                    </div>
                 </ThemeProvider>
             </body>
         </html>

@@ -3,25 +3,28 @@
 import { GradientChangingText } from "@/components/gradient-text";
 import { Button } from "@/components/ui/button";
 import api from "@/lib/api";
-import { Session } from "@/lib/definitions";
-import { useMutation } from "@tanstack/react-query";
 import { useRouter } from "next/navigation";
+import { useState } from "react";
 import { toast } from "sonner";
 
 export default function Home() {
     const router = useRouter();
+    const [loading, setLoading] = useState(false);
 
-    const createSession = useMutation({
-        async mutationFn() {
-            return await api.session.createSession();
-        },
-        onSuccess(session: Session) {
-            router.push(`/${session.id}`);
-        },
-        onError() {
-            toast("Failed to create session");
-        },
-    });
+    function createSession() {
+        setLoading(true);
+        api.session
+            .createSession()
+            .then((session) => {
+                router.push(`/${session.id}`);
+            })
+            .catch(() => {
+                toast("Failed to create session");
+            })
+            .finally(() => {
+                setLoading(false);
+            });
+    }
 
     return (
         <div className="w-full h-full flex flex-col gap-8 justify-center items-center">
@@ -33,11 +36,9 @@ export default function Home() {
                 create a session and share the link.
             </p>
             <Button
-                loading={createSession.isPending}
-                disabled={createSession.isPending}
-                onClick={async () => {
-                    await createSession.mutateAsync();
-                }}
+                loading={loading}
+                disabled={loading}
+                onClick={createSession}
             >
                 New Session
             </Button>
