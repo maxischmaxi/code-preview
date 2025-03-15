@@ -1,8 +1,7 @@
 "use client";
 
 import { SocketEvent } from "@/lib/definitions";
-import { getId } from "@/lib/id";
-import { generateNickname } from "@/lib/random-name";
+import { getId, getNickname } from "@/lib/id";
 import { getApiGateway } from "@/lib/utils";
 import { createContext, ReactNode, useEffect, useState } from "react";
 import { io } from "socket.io-client";
@@ -38,14 +37,9 @@ export function SocketProvider({ children }: { children: ReactNode }) {
             ) {
                 return;
             }
-            let localNickname = localStorage.getItem("nickname");
-            if (!localNickname) {
-                localNickname = generateNickname();
-                localStorage.setItem("nickname", localNickname);
-            }
             socket.emit(SocketEvent.JOIN, {
                 id: getId(),
-                nickname: localNickname,
+                nickname: getNickname(),
             });
         });
 
