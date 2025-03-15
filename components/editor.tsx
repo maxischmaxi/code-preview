@@ -1,34 +1,17 @@
 "use client";
 
-/**
- * - add support for admin roles
- * - admin adds password to session
- * - split view with solution
- * - admin can assign admin role
- * - user badges with random animal names on top
- * - set own username after joining session
- * - multicursor functionality, with colors and names
- **/
-
-import { PanelGroup, Panel, PanelResizeHandle } from "react-resizable-panels";
+import { PanelGroup, Panel } from "react-resizable-panels";
 import { toast } from "sonner";
 import copy from "copy-to-clipboard";
 import { Monaco, Editor as MonacoEditor } from "@monaco-editor/react";
 import { use, useCallback, useEffect, useRef, useState } from "react";
-import { Badge } from "./ui/badge";
 import { ModeToggle } from "./mode-toggle";
-import {
-    CodeIcon,
-    Copy,
-    Plus,
-    Presentation,
-    Settings,
-    Users,
-} from "lucide-react";
+import { ClipboardCopy } from "lucide-react";
 import { Button } from "./ui/button";
 import {
     ConnectedClient,
     CursorPosition,
+    CursorSelection,
     Session,
     SocketEvent,
     Template,
@@ -36,11 +19,11 @@ import {
 import { getId } from "@/lib/id";
 import { useEditorTheme } from "@/hooks/useEditorTheme";
 import { socket, SocketContext } from "./socket-provider";
-import { TemplateDialog } from "./template-dialog";
-import { UserPanel } from "./user-panel";
 import { Tooltip, TooltipContent, TooltipTrigger } from "./ui/tooltip";
-import { NewTemplateDialog } from "./new-template-dialog";
-import { cn } from "@/lib/utils";
+import { NicknameDialog } from "./nickname-dialog";
+import { AdminPanel } from "./admin-panel";
+import { Solution } from "./solution";
+import { Avatars } from "./avatars";
 
 type Props = {
     session: Session;
@@ -51,16 +34,14 @@ const id = getId();
 
 export function Editor({ session, templates }: Props) {
     const theme = useEditorTheme();
+
     const { ready } = use(SocketContext);
     const [lang, setLang] = useState<Session["language"]>(session.language);
     const [code, setCode] = useState(session.code);
     const [solution, setSolution] = useState(session.solution);
+    const [linting, setLinting] = useState(session.linting);
     const [clients, setClients] = useState<ConnectedClient[]>([]);
-    const [showConfigMenu, setShowConfigMenu] = useState(false);
     const [admins, setAdmins] = useState<string[]>(session.admins);
-    const [showSolution, setShowSolution] = useState(id === session.createdBy);
-    const [showUsers, setShowUsers] = useState(false);
-    const [showNewTemplateDialog, setShowNewTemplateDialog] = useState(false);
     const [solutionPresented, setSolutionPresented] = useState(
         session.solutionPresented,
     );
@@ -69,44 +50,86 @@ export function Editor({ session, templates }: Props) {
     const [cursorPositions, setCursorPositions] = useState<
         Array<Omit<CursorPosition, "sessionId">>
     >([]);
+    const [cursorSelections, setCursorSelections] = useState<
+        Array<Omit<CursorSelection, "sessionId">>
+    >([]);
 
     const updateCursors = useCallback(
-        (positions: Array<Omit<CursorPosition, "sessionId">>) => {
+        (
+            positions: Array<Omit<CursorPosition, "sessionId">>,
+            selections: Array<Omit<CursorSelection, "sessionId">>,
+        ) => {
             if (!decorationsRef.current) {
                 return;
             }
+            if (!editorRef.current) {
+                return;
+            }
 
-            const newDecorations = positions
-                .filter((p) => p.userId !== id)
-                .map((cursor) => {
-                    if (!editorRef.current) {
-                        return null;
-                    }
+            const newDecorations = [];
 
-                    return {
-                        range: new editorRef.current.Range(
-                            cursor.cursor.lineNumber,
-                            cursor.cursor.column,
-                            cursor.cursor.lineNumber,
-                            cursor.cursor.column,
-                        ),
-                        options: {
-                            className: "multi-cursor",
-                            inWholeLine: false,
-                            afterContentClassName:
-                                admins.includes(cursor.userId) ||
-                                cursor.userId === session.createdBy
-                                    ? "cursor-label-admin"
-                                    : "cursor-label-default",
-                        },
-                    };
-                })
-                .filter(Boolean);
+            for (const position of positions) {
+                if (position.userId === id) {
+                    continue;
+                }
+
+                newDecorations.push({
+                    range: new editorRef.current.Range(
+                        position.cursor.lineNumber,
+                        position.cursor.column,
+                        position.cursor.lineNumber,
+                        position.cursor.column,
+                    ),
+                    options: {
+                        className: `multi-cursor-position multi-cursor-position-${position.userId}`,
+                        inWholeLine: false,
+                        afterContentClassName: `cursor-label-${position.userId}`,
+                    },
+                });
+            }
+
+            for (const selection of selections) {
+                newDecorations.push({
+                    range: new editorRef.current.Range(
+                        selection.startLineNumber,
+                        selection.startColumn,
+                        selection.endLineNumber,
+                        selection.endColumn,
+                    ),
+                    options: {
+                        className: `multi-cursor-selection multi-cursor-selection-${selection.userId}`,
+                        inWholeLine: true,
+                    },
+                });
+            }
 
             // @ts-expect-error - Property 'set' does not exist on type 'DecorationsCollection'.
             decorationsRef.current.set(newDecorations);
+
+            setTimeout(() => {
+                const positions = document.querySelectorAll(
+                    ".multi-cursor-position",
+                );
+
+                for (const element of positions) {
+                    element.innerHTML = "";
+                }
+
+                for (const client of clients) {
+                    const positionNode = document.querySelector(
+                        `.multi-cursor-position-${client.userId}`,
+                    );
+
+                    if (positionNode) {
+                        const label = document.createElement("div");
+                        label.className = "cursor-label-default";
+                        label.textContent = client.nickname;
+                        positionNode.appendChild(label);
+                    }
+                }
+            }, 32);
         },
-        [admins, session.createdBy],
+        [clients],
     );
 
     useEffect(() => {
@@ -119,8 +142,8 @@ export function Editor({ session, templates }: Props) {
     }, [ready, session.id]);
 
     useEffect(() => {
-        updateCursors(cursorPositions);
-    }, [cursorPositions, updateCursors]);
+        updateCursors(cursorPositions, cursorSelections);
+    }, [cursorPositions, cursorSelections, updateCursors]);
 
     useEffect(() => {
         function onClientsHandler(data: ConnectedClient[]) {
@@ -159,6 +182,60 @@ export function Editor({ session, templates }: Props) {
             setCursorPositions(data);
         }
 
+        function onSetNicknameHandler(client: ConnectedClient) {
+            if (client.userId === id) {
+                return;
+            }
+
+            setClients((prev) => {
+                const newClients = structuredClone(prev);
+                const index = newClients.findIndex(
+                    (c) => c.userId === client.userId,
+                );
+                if (index === -1) {
+                    return [...newClients, client];
+                }
+
+                newClients[index] = client;
+                return newClients;
+            });
+        }
+
+        function onLintingHandler(data: boolean) {
+            setLinting(data);
+        }
+
+        function onRemoveSelection(userId: string) {
+            setCursorPositions((prev) => {
+                const newPositions = structuredClone(prev);
+                const index = newPositions.findIndex(
+                    (s) => s.userId === userId,
+                );
+                if (index === -1) {
+                    return newPositions;
+                }
+
+                newPositions.splice(index, 1);
+                return newPositions;
+            });
+            setCursorSelections((prev) => {
+                const newSelections = structuredClone(prev);
+                const index = newSelections.findIndex(
+                    (s) => s.userId === userId,
+                );
+                if (index === -1) {
+                    return newSelections;
+                }
+
+                newSelections.splice(index, 1);
+                return newSelections;
+            });
+        }
+
+        function onSetSelection(data: CursorSelection[]) {
+            setCursorSelections(data);
+        }
+
         socket.on(SocketEvent.JOIN_SESSION, onClientsHandler);
         socket.on(SocketEvent.LEAVE_SESSION, onClientsHandler);
         socket.on(SocketEvent.TEXT_INPUT, onTextInputHandler);
@@ -168,6 +245,10 @@ export function Editor({ session, templates }: Props) {
         socket.on(SocketEvent.SET_SOLUTION, onSetSolutionHandler);
         socket.on(SocketEvent.SOLUTION_PRESENTED, onSolutionPresentedHandler);
         socket.on(SocketEvent.SEND_CURSOR_POSITION, onCursorPositionHandler);
+        socket.on(SocketEvent.SET_NICKNAME, onSetNicknameHandler);
+        socket.on(SocketEvent.SET_LINTING, onLintingHandler);
+        socket.on(SocketEvent.SET_SELECTION, onSetSelection);
+        socket.on(SocketEvent.REMOVE_CURSOR, onRemoveSelection);
 
         return () => {
             socket.off(SocketEvent.JOIN_SESSION, onClientsHandler);
@@ -185,25 +266,22 @@ export function Editor({ session, templates }: Props) {
                 SocketEvent.SEND_CURSOR_POSITION,
                 onCursorPositionHandler,
             );
+            socket.off(SocketEvent.SET_NICKNAME, onSetNicknameHandler);
+            socket.off(SocketEvent.SET_LINTING, onLintingHandler);
+            socket.off(SocketEvent.SET_SELECTION, onSetSelection);
+            socket.off(SocketEvent.REMOVE_CURSOR, onRemoveSelection);
         };
     }, []);
 
     useEffect(() => {
         function onKeyDown(e: KeyboardEvent) {
-            if (e.metaKey && e.key === ",") {
-                if (id === session.createdBy || admins.includes(id)) {
-                    e.preventDefault();
-                    setShowConfigMenu((prev) => !prev);
-                }
-            }
-
             if (e.metaKey && e.key === "s") {
                 e.preventDefault();
             }
         }
 
         function onBlur() {
-            socket.emit(SocketEvent.REMOVE_CURSOR_POISITON, {
+            socket.emit(SocketEvent.REMOVE_CURSOR, {
                 sessionId: session.id,
                 userId: id,
             });
@@ -237,152 +315,64 @@ export function Editor({ session, templates }: Props) {
         }
     }
 
-    function setTemplate(templateId: string) {
-        const template = templates.find((t) => t.id === templateId);
-
-        if (!template) {
-            toast("Template not found");
-            return;
-        }
-
-        socket.emit(SocketEvent.SET_SOLUTION, {
+    function makeUserAdmin(client: ConnectedClient) {
+        socket.emit(SocketEvent.SET_ADMIN, {
             sessionId: session.id,
-            userId: id,
-            templateId: templateId,
+            userId: client.userId,
         });
-
-        setCode(template.code);
-        setLang(template.language);
-        setSolution(template.solution);
-        setSolutionPresented(false);
-        setShowConfigMenu(false);
     }
 
-    function toggleUserAdmin(client: ConnectedClient) {
-        if (admins.includes(client.userId)) {
-            socket.emit(SocketEvent.REMOVE_ADMIN, {
-                sessionId: session.id,
-                userId: client.userId,
-            });
-        } else {
-            socket.emit(SocketEvent.SET_ADMIN, {
-                sessionId: session.id,
-                userId: client.userId,
-            });
-        }
+    function makeUserNotAdmin(client: ConnectedClient) {
+        socket.emit(SocketEvent.REMOVE_ADMIN, {
+            sessionId: session.id,
+            userId: client.userId,
+        });
     }
 
-    function presentSolution() {
-        setSolutionPresented(true);
+    function handleSetSolutionPresented(presented: boolean) {
+        setSolutionPresented(presented);
         socket.emit(SocketEvent.SOLUTION_PRESENTED, {
             sessionId: session.id,
             userId: id,
+            presented,
         });
     }
+
+    const isAdmin = session.createdBy === id || admins.includes(id);
 
     return (
         <div className="w-full h-full flex flex-col flex-nowrap">
             <header className="p-4 flex flex-row flex-nowrap justify-between items-center border-b">
-                <Badge className="cursor-pointer" onClick={copyToClipboard}>
-                    {session.id}
-                    <Copy />
-                </Badge>
-                <div className="flex flex-row flex-nowrap gap-4 items-center">
-                    <div className="flex justify-center items-center py-2">
-                        <Badge variant="outline">{clients.length}</Badge>
-                    </div>
-                    {(id === session.createdBy || admins.includes(id)) && (
-                        <>
-                            <Tooltip>
-                                <TooltipTrigger asChild>
-                                    <Button
-                                        type="button"
-                                        variant={
-                                            solutionPresented
-                                                ? "secondary"
-                                                : "outline"
-                                        }
-                                        disabled={solutionPresented}
-                                        className={cn(
-                                            solutionPresented && "bg-amber-600",
-                                        )}
-                                        onClick={presentSolution}
-                                    >
-                                        <Presentation />
-                                    </Button>
-                                </TooltipTrigger>
-                            </Tooltip>
-                            <Tooltip>
-                                <TooltipTrigger asChild>
-                                    <Button
-                                        type="button"
-                                        variant={
-                                            showSolution
-                                                ? "secondary"
-                                                : "outline"
-                                        }
-                                        onClick={() =>
-                                            setShowSolution((prev) => !prev)
-                                        }
-                                        size="icon"
-                                    >
-                                        <CodeIcon />
-                                    </Button>
-                                </TooltipTrigger>
-                                <TooltipContent>
-                                    {showSolution
-                                        ? "Hide Solution"
-                                        : "Show Solution"}
-                                </TooltipContent>
-                            </Tooltip>
-                            <Tooltip>
-                                <TooltipTrigger asChild>
-                                    <Button
-                                        type="button"
-                                        size="icon"
-                                        variant={
-                                            showConfigMenu
-                                                ? "secondary"
-                                                : "outline"
-                                        }
-                                        onClick={() =>
-                                            setShowConfigMenu((prev) => !prev)
-                                        }
-                                    >
-                                        <Settings />
-                                    </Button>
-                                </TooltipTrigger>
-                                <TooltipContent>Settings</TooltipContent>
-                            </Tooltip>
-                            <Button
-                                type="button"
-                                size="icon"
-                                variant="outline"
-                                onClick={() => setShowNewTemplateDialog(true)}
-                            >
-                                <Plus />
+                <div className="flex flex-row flex-nowrap gap-4">
+                    <NicknameDialog />
+                    <Tooltip>
+                        <TooltipTrigger asChild>
+                            <Button type="button" onClick={copyToClipboard}>
+                                <ClipboardCopy />
                             </Button>
-                            <Tooltip>
-                                <TooltipTrigger asChild>
-                                    <Button
-                                        type="button"
-                                        size="icon"
-                                        variant={
-                                            showUsers ? "secondary" : "outline"
-                                        }
-                                        onClick={() =>
-                                            setShowUsers((prev) => !prev)
-                                        }
-                                    >
-                                        <Users />
-                                    </Button>
-                                </TooltipTrigger>
-                                <TooltipContent>
-                                    {showUsers ? "Hide Users" : "Show Users"}
-                                </TooltipContent>
-                            </Tooltip>
-                        </>
-                    )}
+                        </TooltipTrigger>
+                        <TooltipContent>
+                            Copy session link to clipboard
+                        </TooltipContent>
+                    </Tooltip>
+                </div>
+
+                <div className="flex flex-row flex-nowrap gap-4 items-center">
+                    <Avatars connectedClients={clients} />
+                    <AdminPanel
+                        isAdmin={isAdmin}
+                        templates={templates}
+                        session={session}
+                        setCode={setCode}
+                        setLang={setLang}
+                        setSolution={setSolution}
+                        setSolutionPresented={handleSetSolutionPresented}
+                        admins={admins}
+                        connectedClients={clients}
+                        solutionPresented={solutionPresented}
+                        makeUserAdmin={makeUserAdmin}
+                        makeUserNotAdmin={makeUserNotAdmin}
+                    />
                     <ModeToggle />
                 </div>
             </header>
@@ -398,6 +388,22 @@ export function Editor({ session, templates }: Props) {
                             onMount={(editor) => {
                                 const decs =
                                     editor.createDecorationsCollection();
+
+                                editor.onDidChangeCursorSelection((e) => {
+                                    socket.emit(SocketEvent.SET_SELECTION, {
+                                        sessionId: session.id,
+                                        userId: id,
+                                        selection: {
+                                            startColumn:
+                                                e.selection.startColumn,
+                                            startLineNumber:
+                                                e.selection.startLineNumber,
+                                            endColumn: e.selection.endColumn,
+                                            endLineNumber:
+                                                e.selection.endLineNumber,
+                                        },
+                                    });
+                                });
 
                                 editor.onDidChangeCursorPosition((e) => {
                                     socket.emit(
@@ -415,7 +421,10 @@ export function Editor({ session, templates }: Props) {
                                 });
                                 // @ts-expect-error - Property 'current' does not exist on type 'null'.
                                 decorationsRef.current = decs;
-                                updateCursors(cursorPositions);
+                                updateCursors(
+                                    cursorPositions,
+                                    cursorSelections,
+                                );
                             }}
                             beforeMount={(monaco) => {
                                 editorRef.current = monaco;
@@ -424,25 +433,25 @@ export function Editor({ session, templates }: Props) {
                                         target: monaco.languages.typescript
                                             .ScriptTarget.ES2020,
                                         allowJs: true,
-                                        checkJs: false,
+                                        checkJs: linting,
                                     },
                                 );
 
                                 monaco.languages.typescript.typescriptDefaults.setDiagnosticsOptions(
                                     {
-                                        noSemanticValidation: true,
-                                        noSyntaxValidation: true,
-                                        noSuggestionDiagnostics: true,
-                                        onlyVisible: true,
+                                        noSemanticValidation: !linting,
+                                        noSyntaxValidation: !linting,
+                                        noSuggestionDiagnostics: !linting,
+                                        onlyVisible: !linting,
                                     },
                                 );
 
                                 monaco.languages.typescript.javascriptDefaults.setDiagnosticsOptions(
                                     {
-                                        noSemanticValidation: true,
-                                        noSyntaxValidation: true,
-                                        onlyVisible: true,
-                                        noSuggestionDiagnostics: true,
+                                        noSemanticValidation: !linting,
+                                        noSyntaxValidation: !linting,
+                                        onlyVisible: !linting,
+                                        noSuggestionDiagnostics: !linting,
                                     },
                                 );
 
@@ -451,20 +460,22 @@ export function Editor({ session, templates }: Props) {
                                         allowJs: true,
                                         target: monaco.languages.typescript
                                             .ScriptTarget.ES2020,
-                                        checkJs: false,
+                                        checkJs: linting,
                                     },
                                 );
 
                                 monaco.languages.json.jsonDefaults.setDiagnosticsOptions(
                                     {
-                                        validate: false,
-                                        schemaValidation: "ignore",
-                                        enableSchemaRequest: false,
+                                        validate: linting,
+                                        schemaValidation: linting
+                                            ? "warning"
+                                            : "ignore",
+                                        enableSchemaRequest: linting,
                                     },
                                 );
 
                                 monaco.languages.css.cssDefaults.setOptions({
-                                    validate: false,
+                                    validate: linting,
                                     lint: {
                                         argumentsInColorFunction: "ignore",
                                         boxModel: "ignore",
@@ -491,7 +502,7 @@ export function Editor({ session, templates }: Props) {
                                 });
 
                                 monaco.languages.css.scssDefaults.setOptions({
-                                    validate: false,
+                                    validate: linting,
                                     lint: {
                                         argumentsInColorFunction: "ignore",
                                         boxModel: "ignore",
@@ -518,7 +529,7 @@ export function Editor({ session, templates }: Props) {
                                 });
 
                                 monaco.languages.css.lessDefaults.setOptions({
-                                    validate: false,
+                                    validate: linting,
                                     lint: {
                                         argumentsInColorFunction: "ignore",
                                         boxModel: "ignore",
@@ -545,165 +556,72 @@ export function Editor({ session, templates }: Props) {
                                 });
                             }}
                             options={{
-                                "semanticHighlighting.enabled": false,
-                                contextmenu: false,
-                                codeLens: false,
+                                "semanticHighlighting.enabled": linting,
+                                contextmenu: linting,
+                                codeLens: linting,
                                 automaticLayout: true,
                                 theme,
                                 minimap: { enabled: false },
                                 hover: {
-                                    enabled: false,
+                                    enabled: linting,
                                     delay: 250,
                                 },
                                 suggest: {
-                                    preview: false,
-                                    showWords: false,
+                                    preview: linting,
+                                    showWords: linting,
                                 },
                                 tabSize: 4,
                                 quickSuggestions: {
-                                    comments: false,
-                                    other: false,
-                                    strings: false,
+                                    comments: linting,
+                                    other: linting,
+                                    strings: linting,
                                 },
-                                occurrencesHighlight: "off",
-                                showDeprecated: false,
-                                showUnused: false,
+                                occurrencesHighlight: linting
+                                    ? "singleFile"
+                                    : "off",
+                                showDeprecated: linting,
+                                showUnused: linting,
                                 showFoldingControls: "mouseover",
                                 lightbulb: {
                                     // @ts-expect-error - Property 'enabled' does not exist on type 'boolean'.
-                                    enabled: "off",
+                                    enabled: linting ? "on" : "off",
                                 },
                                 inlineSuggest: {
-                                    enabled: false,
+                                    enabled: linting,
                                 },
                                 inlayHints: {
-                                    enabled: "off",
+                                    enabled: linting ? "on" : "off",
                                 },
                                 parameterHints: {
-                                    enabled: false,
+                                    enabled: linting,
                                 },
-                                wordBasedSuggestions: false
+                                wordBasedSuggestions: linting
                                     ? "currentDocument"
                                     : "off",
-                                suggestOnTriggerCharacters: false,
-                                acceptSuggestionOnEnter: false ? "on" : "off",
-                                snippetSuggestions: "none",
-                                renderValidationDecorations: "off",
-                                tabCompletion: "off",
-                                formatOnPaste: false,
-                                formatOnType: false,
+                                suggestOnTriggerCharacters: linting,
+                                acceptSuggestionOnEnter: linting ? "on" : "off",
+                                snippetSuggestions: linting
+                                    ? undefined
+                                    : "none",
+                                renderValidationDecorations: linting
+                                    ? "on"
+                                    : "off",
+                                tabCompletion: linting ? "on" : "off",
+                                formatOnPaste: linting,
+                                formatOnType: linting,
                                 padding: { top: 16, bottom: 16 },
                                 language: lang,
                             }}
                         />
                     </Panel>
-                    {(showSolution || solutionPresented) && (
-                        <>
-                            <PanelResizeHandle className="w-1 bg-secondary" />
-                            <Panel>
-                                <MonacoEditor
-                                    theme={theme}
-                                    beforeMount={(monaco) => {
-                                        monaco.languages.typescript.typescriptDefaults.setCompilerOptions(
-                                            {
-                                                target: monaco.languages
-                                                    .typescript.ScriptTarget
-                                                    .ES2020,
-                                            },
-                                        );
-
-                                        monaco.languages.typescript.typescriptDefaults.setDiagnosticsOptions(
-                                            {
-                                                noSemanticValidation: false,
-                                                noSyntaxValidation: false,
-                                            },
-                                        );
-
-                                        monaco.languages.typescript.javascriptDefaults.setDiagnosticsOptions(
-                                            {
-                                                noSemanticValidation: false,
-                                                noSyntaxValidation: false,
-                                            },
-                                        );
-
-                                        monaco.languages.json.jsonDefaults.setDiagnosticsOptions(
-                                            {
-                                                validate: true,
-                                            },
-                                        );
-
-                                        monaco.languages.css.cssDefaults.setOptions(
-                                            {
-                                                validate: true,
-                                            },
-                                        );
-                                    }}
-                                    className="w-full h-full"
-                                    value={solution}
-                                    language={lang}
-                                    options={{
-                                        "semanticHighlighting.enabled": true,
-                                        contextmenu: true,
-                                        codeLens: true,
-                                        automaticLayout: true,
-                                        hover: {
-                                            enabled: true,
-                                            delay: 250,
-                                        },
-                                        suggest: {
-                                            preview: true,
-                                            showWords: true,
-                                        },
-                                        tabSize: 4,
-                                        quickSuggestions: {
-                                            comments: true,
-                                            other: true,
-                                            strings: true,
-                                        },
-                                        parameterHints: {
-                                            enabled: true,
-                                        },
-                                        wordBasedSuggestions: "currentDocument",
-                                        suggestOnTriggerCharacters: true,
-                                        acceptSuggestionOnEnter: "on",
-                                        tabCompletion: "on",
-                                        formatOnPaste: false,
-                                        formatOnType: false,
-                                        theme,
-                                        language: lang,
-                                        minimap: { enabled: false },
-                                        readOnly: true,
-                                        padding: { top: 16, bottom: 16 },
-                                    }}
-                                />
-                            </Panel>
-                        </>
-                    )}
-                    {showUsers && (
-                        <>
-                            <PanelResizeHandle className="w-1 bg-secondary" />
-                            <Panel>
-                                <UserPanel
-                                    admins={admins}
-                                    connectedClients={clients}
-                                    session={session}
-                                    toggleUserAdmin={toggleUserAdmin}
-                                />
-                            </Panel>
-                        </>
-                    )}
+                    <Solution
+                        show={solutionPresented}
+                        lang={lang}
+                        solution={solution}
+                        theme={theme}
+                    />
                 </PanelGroup>
             </div>
-            <NewTemplateDialog
-                open={showNewTemplateDialog}
-                setOpen={setShowNewTemplateDialog}
-            />
-            <TemplateDialog
-                open={showConfigMenu}
-                templates={templates}
-                selectTemplate={setTemplate}
-                setOpen={setShowConfigMenu}
-            />
         </div>
     );
 }

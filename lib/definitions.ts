@@ -9,7 +9,10 @@ export enum SocketEvent {
     REMOVE_ADMIN = "remove-admin",
     SOLUTION_PRESENTED = "solution-presented",
     SEND_CURSOR_POSITION = "send-cursor-position",
-    REMOVE_CURSOR_POISITON = "remove-cursor-position",
+    SET_NICKNAME = "set-nickname",
+    SET_LINTING = "set-linting",
+    SET_SELECTION = "set-selection",
+    REMOVE_CURSOR = "remove-cursor",
 }
 
 export type CursorPosition = {
@@ -26,6 +29,7 @@ export type Session = {
     language: string;
     code: string;
     solution: string;
+    linting: boolean;
     createdAt: string;
     createdBy: string;
     admins: string[];
@@ -36,6 +40,7 @@ export type ConnectedClient = {
     socketId: string;
     sessionId: string | null;
     userId: string;
+    nickname: string;
 };
 
 export type OnClientJoinedSession = {
@@ -55,4 +60,13 @@ export type Template = {
     id: string;
     solution: string;
     language: string;
+};
+
+export type CursorSelection = {
+    userId: string;
+    sessionId: string;
+    startColumn: number;
+    startLineNumber: number;
+    endColumn: number;
+    endLineNumber: number;
 };

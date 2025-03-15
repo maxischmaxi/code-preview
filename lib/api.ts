@@ -10,11 +10,12 @@ export function createUrl(path: string) {
     return `${apiGateway}${path}`;
 }
 
-async function createSession(): Promise<Session> {
+async function createSession(nickname: string): Promise<Session> {
     const res = await fetch(createUrl("/session"), {
         method: "POST",
         body: JSON.stringify({
             id: getId(),
+            nickname,
         }),
         headers: {
             "Content-Type": "application/json",
@@ -53,6 +54,13 @@ async function getSession(id: string): Promise<Session> {
 }
 
 async function joinSession(sessionId: string): Promise<Session> {
+    if (
+        typeof window === "undefined" ||
+        typeof window.localStorage === "undefined"
+    ) {
+        return Promise.reject("Failed to join session");
+    }
+
     const userId = localStorage.getItem("id");
 
     const res = await fetch(
